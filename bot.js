@@ -3,7 +3,6 @@ const sqlite3 = require('sqlite3').verbose();
 const axios = require('axios');
 const crypto = require('crypto');
 const moment = require('moment');
-const nodeCron = require('node-cron');
 
 // Bot configuration
 const BOT_TOKEN = "8006342815:AAHyl0Aamf5fCyj4u0EgYil0zhUcisFnXq0";
@@ -133,7 +132,11 @@ class Database {
         ];
 
         tables.forEach(table => {
-            this.db.run(table);
+            this.db.run(table, (err) => {
+                if (err) {
+                    console.error('Error creating table:', err);
+                }
+            });
         });
     }
 
@@ -428,6 +431,7 @@ class AutoLotteryBot {
         this.bot = new TelegramBot(BOT_TOKEN, { polling: true });
         this.db = new Database();
         this.setupHandlers();
+        console.log("Auto Lottery Bot initialized successfully!");
     }
 
     setupHandlers() {
@@ -444,13 +448,24 @@ class AutoLotteryBot {
         this.bot.on('callback_query', (query) => this.handleCallbackQuery(query));
 
         // Message handler
-        this.bot.on('message', (msg) => this.handleMessage(msg));
+        this.bot.on('message', (msg) => {
+            if (msg.text && !msg.text.startsWith('/')) {
+                this.handleMessage(msg);
+            }
+        });
+
+        // Error handler
+        this.bot.on('polling_error', (error) => {
+            console.error('Polling error:', error);
+        });
     }
 
     async handleStart(msg) {
         const chatId = msg.chat.id;
         const userId = String(chatId);
         
+        console.log(`User ${userId} started the bot`);
+
         // Initialize user session
         userSessions[userId] = {
             step: 'main',
@@ -488,11 +503,11 @@ Manual Features:
 Press Run Bot to start auto betting!`;
 
         await this.bot.sendMessage(chatId, welcomeText, {
-            reply_markup: this.getMainKeyboard(userId)
+            reply_markup: this.getMainKeyboard()
         });
     }
 
-    getMainKeyboard(userId = null) {
+    getMainKeyboard() {
         return {
             keyboard: [
                 [{ text: "Login" }],
@@ -532,12 +547,55 @@ Press Run Bot to start auto betting!`;
         };
     }
 
+    getBsPatternKeyboard() {
+        return {
+            keyboard: [
+                [{ text: "Set BS Pattern" }, { text: "View BS Pattern" }],
+                [{ text: "Clear BS Pattern" }, { text: "Bot Settings" }]
+            ],
+            resize_keyboard: true
+        };
+    }
+
+    getColourPatternKeyboard() {
+        return {
+            keyboard: [
+                [{ text: "Set Colour Pattern" }, { text: "View Colour Pattern" }],
+                [{ text: "Clear Colour Pattern" }, { text: "Bot Settings" }]
+            ],
+            resize_keyboard: true
+        };
+    }
+
+    getSlLayerKeyboard() {
+        return {
+            keyboard: [
+                [{ text: "Set SL Pattern" }, { text: "View SL Pattern" }],
+                [{ text: "Reset SL Pattern" }, { text: "SL Stats" }],
+                [{ text: "Main Menu" }]
+            ],
+            resize_keyboard: true
+        };
+    }
+
+    getLanguageKeyboard() {
+        return {
+            keyboard: [
+                [{ text: "English" }, { text: "Burmese" }],
+                [{ text: "Chinese" }, { text: "Thailand" }],
+                [{ text: "Pakistan" }, { text: "Main Menu" }]
+            ],
+            resize_keyboard: true
+        };
+    }
+
     async handleCallbackQuery(query) {
         const chatId = query.message.chat.id;
         const userId = String(chatId);
 
+        console.log(`Callback query: ${query.data} from user ${userId}`);
+
         if (query.data === "check_join") {
-            // Handle channel join verification
             await this.bot.answerCallbackQuery(query.id);
             await this.bot.editMessageText("Thank you for joining our channel! You can now use the bot.\n\nPress /start to begin.", {
                 chat_id: chatId,
@@ -553,6 +611,8 @@ Press Run Bot to start auto betting!`;
         const userId = String(chatId);
         const text = msg.text;
 
+        console.log(`User ${userId} sent: ${text}`);
+
         if (!userSessions[userId]) {
             userSessions[userId] = {
                 step: 'main',
@@ -566,7 +626,7 @@ Press Run Bot to start auto betting!`;
 
         const userSession = userSessions[userId];
 
-        // Handle different steps and commands
+        // Handle different steps
         switch (userSession.step) {
             case 'login_phone':
                 userSession.phone = text;
@@ -588,31 +648,41 @@ Press Run Bot to start auto betting!`;
                 await this.handleSetBetSequence(chatId, userId, text);
                 break;
 
+            case 'set_profit_target':
+                await this.handleSetProfitTarget(chatId, userId, text);
+                break;
+
+            case 'set_loss_target':
+                await this.handleSetLossTarget(chatId, userId, text);
+                break;
+
+            case 'set_bs_pattern':
+                await this.handleSetBsPattern(chatId, userId, text);
+                break;
+
+            case 'set_colour_pattern':
+                await this.handleSetColourPattern(chatId, userId, text);
+                break;
+
+            case 'set_sl_pattern':
+                await this.handleSetSlPattern(chatId, userId, text);
+                break;
+
             default:
-                await this.handleCommand(chatId, userId, text);
+                // Handle button commands
+                await this.handleButtonCommand(chatId, userId, text);
         }
     }
 
-    async handleCommand(chatId, userId, text) {
+    async handleButtonCommand(chatId, userId, text) {
+        console.log(`Handling button command: '${text}' for user ${userId}`);
+
         const userSession = userSessions[userId];
 
+        // Main Menu buttons
         switch (text) {
             case "Login":
                 await this.handleBigwinLogin(chatId, userId);
-                break;
-
-            case "Enter Phone":
-                userSession.step = 'login_phone';
-                await this.bot.sendMessage(chatId, "Please enter your phone number (without country code):");
-                break;
-
-            case "Enter Password":
-                userSession.step = 'login_password';
-                await this.bot.sendMessage(chatId, "Please enter your password:");
-                break;
-
-            case "Login Now":
-                await this.processLogin(chatId, userId);
                 break;
 
             case "Balance":
@@ -651,6 +721,14 @@ Press Run Bot to start auto betting!`;
                 await this.showMyBets(chatId, userId);
                 break;
 
+            case "SL Layer":
+                await this.showSlLayer(chatId, userId);
+                break;
+
+            case "Language":
+                await this.showLanguageMenu(chatId, userId);
+                break;
+
             case "Run Bot":
                 await this.runBot(chatId, userId);
                 break;
@@ -659,6 +737,33 @@ Press Run Bot to start auto betting!`;
                 await this.stopBot(chatId, userId);
                 break;
 
+            case "Bot Info":
+                await this.showBotInfo(chatId, userId);
+                break;
+
+            // Login menu buttons
+            case "Enter Phone":
+                userSession.step = 'login_phone';
+                await this.bot.sendMessage(chatId, "Please enter your phone number (without country code):");
+                break;
+
+            case "Enter Password":
+                userSession.step = 'login_password';
+                await this.bot.sendMessage(chatId, "Please enter your password:");
+                break;
+
+            case "Login Now":
+                await this.processLogin(chatId, userId);
+                break;
+
+            case "Back":
+                userSession.step = 'main';
+                await this.bot.sendMessage(chatId, "Main Menu", {
+                    reply_markup: this.getMainKeyboard()
+                });
+                break;
+
+            // Bot Settings buttons
             case "Random BIG":
                 await this.setRandomBig(chatId, userId);
                 break;
@@ -675,22 +780,121 @@ Press Run Bot to start auto betting!`;
                 await this.setFollowBot(chatId, userId);
                 break;
 
+            case "BS Formula":
+                await this.showBsFormula(chatId, userId);
+                break;
+
+            case "Colour Formula":
+                await this.showColourFormula(chatId, userId);
+                break;
+
+            case "Bot Stats":
+                await this.showBotStats(chatId, userId);
+                break;
+
             case "Set Bet Sequence":
                 userSession.step = 'set_bet_sequence';
                 const currentSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
-                await this.bot.sendMessage(chatId, `Current bet sequence: ${currentSequence}\nEnter new bet sequence (comma separated):`);
+                await this.bot.sendMessage(chatId, `Current bet sequence: ${currentSequence}\nEnter new bet sequence (comma separated e.g., 100,300,700,1600,3200,7600,16000,32000):`);
+                break;
+
+            case "Profit Target":
+                userSession.step = 'set_profit_target';
+                const currentProfitTarget = await this.getUserSetting(userId, 'profit_target', 0);
+                await this.bot.sendMessage(chatId, `Set Profit Target\n\nCurrent target: ${currentProfitTarget.toLocaleString()} K\n\nPlease enter the profit target amount (in K):\nExample: 1000 (for 1000 K profit target)\nEnter 0 to disable profit target`);
+                break;
+
+            case "Loss Target":
+                userSession.step = 'set_loss_target';
+                const currentLossTarget = await this.getUserSetting(userId, 'loss_target', 0);
+                await this.bot.sendMessage(chatId, `Set Loss Target\n\nCurrent target: ${currentLossTarget.toLocaleString()} K\n\nPlease enter the loss target amount (in K):\nExample: 500 (for 500 K loss target)\nEnter 0 to disable loss target`);
+                break;
+
+            case "Reset Stats":
+                await this.resetBotStats(chatId, userId);
                 break;
 
             case "Main Menu":
                 userSession.step = 'main';
                 await this.bot.sendMessage(chatId, "Main Menu", {
-                    reply_markup: this.getMainKeyboard(userId)
+                    reply_markup: this.getMainKeyboard()
                 });
                 break;
 
+            // BS Formula buttons
+            case "Set BS Pattern":
+                userSession.step = 'set_bs_pattern';
+                await this.bot.sendMessage(chatId, "Set BS Pattern for BS Formula Mode\n\nEnter your BS pattern using ONLY B for BIG and S for SMALL:\n\nExamples:\n- B,S,B,B\n- S,S,B\n- B,B,B,S\n\nEnter your BS pattern:");
+                break;
+
+            case "View BS Pattern":
+                await this.viewBsPattern(chatId, userId);
+                break;
+
+            case "Clear BS Pattern":
+                await this.clearBsPattern(chatId, userId);
+                break;
+
+            case "Bot Settings":
+                await this.showBotSettings(chatId, userId);
+                break;
+
+            // Colour Formula buttons
+            case "Set Colour Pattern":
+                userSession.step = 'set_colour_pattern';
+                await this.bot.sendMessage(chatId, "Set Colour Pattern for Colour Formula Mode\n\nEnter your Colour pattern using ONLY:\n- G for GREEN\n- R for RED\n- V for VIOLET\n\nExamples:\n- R,G,V,R\n- G,V,R\n- R,R,G\n\nEnter your Colour pattern:");
+                break;
+
+            case "View Colour Pattern":
+                await this.viewColourPattern(chatId, userId);
+                break;
+
+            case "Clear Colour Pattern":
+                await this.clearColourPattern(chatId, userId);
+                break;
+
+            // SL Layer buttons
+            case "Set SL Pattern":
+                await this.setSlPattern(chatId, userId);
+                break;
+
+            case "View SL Pattern":
+                await this.viewSlPattern(chatId, userId);
+                break;
+
+            case "Reset SL Pattern":
+                await this.resetSlPattern(chatId, userId);
+                break;
+
+            case "SL Stats":
+                await this.showSlStats(chatId, userId);
+                break;
+
+            // Language buttons
+            case "English":
+                await this.setEnglishLanguage(chatId, userId);
+                break;
+
+            case "Burmese":
+                await this.setBurmeseLanguage(chatId, userId);
+                break;
+
+            case "Chinese":
+                await this.setChineseLanguage(chatId, userId);
+                break;
+
+            case "Thailand":
+                await this.setThaiLanguage(chatId, userId);
+                break;
+
+            case "Pakistan":
+                await this.setPakistanLanguage(chatId, userId);
+                break;
+
             default:
+                console.log(`Unknown command: '${text}'`);
                 await this.bot.sendMessage(chatId, "Please use the buttons below to navigate.", {
-                    reply_markup: this.getMainKeyboard(userId)
+                    reply_markup: this.getMainKeyboard()
                 });
         }
     }
@@ -735,7 +939,7 @@ Your credentials will be saved for future use!`;
                 const userInfo = await userSession.apiInstance.getUserInfo();
                 const gameId = userInfo.userId || '';
                 
-                // Check if game ID is allowed (implement this function)
+                // Check if game ID is allowed
                 if (!await this.isGameIdAllowed(gameId)) {
                     await this.bot.editMessageText(`❌ Login Failed!\n\nGame ID: ${gameId}\nStatus: NOT ALLOWED\n\nPlease contact admin: @Smile_p2`, {
                         chat_id: chatId,
@@ -768,7 +972,7 @@ Status: ✅ VERIFIED`;
                 });
 
                 await this.bot.sendMessage(chatId, "Choose an option:", {
-                    reply_markup: this.getMainKeyboard(userId)
+                    reply_markup: this.getMainKeyboard()
                 });
             } else {
                 await this.bot.editMessageText(`❌ Login failed: ${result.message}`, {
@@ -1046,20 +1250,12 @@ Choose your betting mode:`;
 
             let betsText = `Your Recent Bets - 777 Big Win\n\n`;
             myBets.forEach((bet, i) => {
-                const [platform_bet, issue, bet_type, amount, result, profit_loss, created_at] = bet;
+                const resultText = bet.result === "WIN" ? 
+                    `WIN (+${(bet.amount + bet.profit_loss).toLocaleString()}K)` : 
+                    `LOSE (-${bet.amount.toLocaleString()}K)`;
                 
-                let resultText;
-                if (result === "WIN") {
-                    const totalWinAmount = amount + profit_loss;
-                    resultText = `WIN (+${totalWinAmount.toLocaleString()}K)`;
-                } else if (result === "LOSE") {
-                    resultText = `LOSE (-${amount.toLocaleString()}K)`;
-                } else {
-                    resultText = "PENDING";
-                }
-                
-                const timeStr = created_at.split(' ')[1]?.substring(0, 5) || created_at.substring(11, 16);
-                betsText += `${i+1}. ${issue} - ${bet_type} - ${amount.toLocaleString()}K - ${resultText}\n`;
+                const timeStr = bet.created_at.split(' ')[1]?.substring(0, 5) || bet.created_at.substring(11, 16);
+                betsText += `${i+1}. ${bet.issue} - ${bet.bet_type} - ${bet.amount.toLocaleString()}K - ${resultText}\n`;
             });
 
             await this.bot.sendMessage(chatId, betsText, { parse_mode: 'Markdown' });
@@ -1168,10 +1364,393 @@ Choose your betting mode:`;
 
             userSessions[userId].step = 'main';
             await this.bot.sendMessage(chatId, `Bet sequence set to: ${betSequence}\nStarting from first amount: ${amounts[0]} K`, {
-                reply_markup: this.getMainKeyboard(userId)
+                reply_markup: this.getMainKeyboard()
             });
         } catch (error) {
             await this.bot.sendMessage(chatId, "Please enter valid numbers separated by commas (e.g., 100,300,700,1600,3200,7600,16000,32000)");
+        }
+    }
+
+    async handleSetProfitTarget(chatId, userId, text) {
+        try {
+            const targetAmount = parseInt(text.trim());
+            if (isNaN(targetAmount) || targetAmount < 0) {
+                await this.bot.sendMessage(chatId, "Please enter a positive number or 0 to disable");
+                return;
+            }
+                
+            await this.saveUserSetting(userId, 'profit_target', targetAmount);
+            userSessions[userId].step = 'main';
+            
+            if (targetAmount === 0) {
+                await this.bot.sendMessage(chatId, "Profit target disabled!\n\nBot will run continuously until manually stopped.", {
+                    reply_markup: this.getBotSettingsKeyboard()
+                });
+            } else {
+                await this.bot.sendMessage(chatId, `Profit target set to: ${targetAmount.toLocaleString()} K\n\nBot will automatically stop when profit reaches ${targetAmount.toLocaleString()} K`, {
+                    reply_markup: this.getBotSettingsKeyboard()
+                });
+            }
+        } catch (error) {
+            await this.bot.sendMessage(chatId, "Please enter a valid number (e.g., 1000 for 1000 K target)");
+        }
+    }
+
+    async handleSetLossTarget(chatId, userId, text) {
+        try {
+            const targetAmount = parseInt(text.trim());
+            if (isNaN(targetAmount) || targetAmount < 0) {
+                await this.bot.sendMessage(chatId, "Please enter a positive number or 0 to disable");
+                return;
+            }
+                
+            await this.saveUserSetting(userId, 'loss_target', targetAmount);
+            userSessions[userId].step = 'main';
+            
+            if (targetAmount === 0) {
+                await this.bot.sendMessage(chatId, "Loss target disabled!\n\nBot will run continuously until manually stopped.", {
+                    reply_markup: this.getBotSettingsKeyboard()
+                });
+            } else {
+                await this.bot.sendMessage(chatId, `Loss target set to: ${targetAmount.toLocaleString()} K\n\nBot will automatically stop when loss reaches ${targetAmount.toLocaleString()} K`, {
+                    reply_markup: this.getBotSettingsKeyboard()
+                });
+            }
+        } catch (error) {
+            await this.bot.sendMessage(chatId, "Please enter a valid number (e.g., 500 for 500 K target)");
+        }
+    }
+
+    async handleSetBsPattern(chatId, userId, text) {
+        const pattern = text.trim().toUpperCase();
+        
+        // Validate BS pattern - only B and S allowed
+        const validChars = {'B', 'S', ','};
+        if (pattern.split('').every(char => validChars.has(char) || char === ' ')) {
+            const cleanPattern = pattern.split(',').map(p => p.trim()).filter(p => p).join(',');
+            
+            if (await this.saveFormulaPatterns(userId, cleanPattern, '')) {
+                userSessions[userId].step = 'main';
+                await this.bot.sendMessage(chatId, `BS Pattern Set Successfully!\n\nBS Pattern: ${cleanPattern}\n\nBot will now follow this BS pattern in BS Formula mode.`, {
+                    reply_markup: this.getBsPatternKeyboard()
+                });
+            } else {
+                await this.bot.sendMessage(chatId, "Error saving BS pattern. Please try again.");
+            }
+        } else {
+            await this.bot.sendMessage(chatId, "Invalid BS pattern! Use only B (BIG), S (SMALL) and commas.\nExamples: B,S,B,B or S,S,B\nPlease enter a valid BS pattern:");
+        }
+    }
+
+    async handleSetColourPattern(chatId, userId, text) {
+        const pattern = text.trim().toUpperCase();
+        
+        // Validate Colour pattern - only G, R, V allowed
+        const validChars = {'G', 'R', 'V', ','};
+        if (pattern.split('').every(char => validChars.has(char) || char === ' ')) {
+            const cleanPattern = pattern.split(',').map(p => p.trim()).filter(p => p).join(',');
+            
+            if (await this.saveFormulaPatterns(userId, '', cleanPattern)) {
+                userSessions[userId].step = 'main';
+                await this.bot.sendMessage(chatId, `Colour Pattern Set Successfully!\n\nColour Pattern: ${cleanPattern}\n\nBot will now follow this Colour pattern in Colour Formula mode.`, {
+                    reply_markup: this.getColourPatternKeyboard()
+                });
+            } else {
+                await this.bot.sendMessage(chatId, "Error saving Colour pattern. Please try again.");
+            }
+        } else {
+            await this.bot.sendMessage(chatId, "Invalid Colour pattern! Use only G (GREEN), R (RED), V (VIOLET) and commas.\nExamples: R,G,V,R or G,V,R\nPlease enter a valid Colour pattern:");
+        }
+    }
+
+    async handleSetSlPattern(chatId, userId, text) {
+        const pattern = text.trim();
+        
+        try {
+            const numbers = text.split(',').map(x => parseInt(x.trim()));
+            if (numbers.every(num => num >= 1 && num <= 5)) {
+                if (await this.saveSlPattern(userId, pattern)) {
+                    userSessions[userId].step = 'main';
+                    await this.bot.sendMessage(chatId, `SL Pattern Set Successfully!\n\nPattern: ${pattern}\n\nSL Pattern saved and ready for use.`, {
+                        reply_markup: this.getMainKeyboard()
+                    });
+                } else {
+                    await this.bot.sendMessage(chatId, "Error saving SL pattern. Please try again.");
+                }
+            } else {
+                await this.bot.sendMessage(chatId, "Invalid pattern! Use only numbers 1-5 separated by commas.\nExample: 1,2,3,4,5\nPlease enter a valid pattern:");
+            }
+        } catch (error) {
+            await this.bot.sendMessage(chatId, "Invalid pattern format! Use only numbers 1-5 separated by commas.\nExample: 1,2,3,4,5\nPlease enter a valid pattern:");
+        }
+    }
+
+    async showBsFormula(chatId, userId) {
+        const patternsData = await this.getFormulaPatterns(userId);
+        const bsPattern = patternsData.bs_pattern || "Not set";
+        
+        const bsInfo = `BS Formula Pattern Mode
+
+Current BS Pattern: ${bsPattern}
+
+To use BS Formula Mode:
+1. Set your BS Pattern first (B,S only)
+2. Bot will follow the pattern automatically
+3. Pattern will loop until cleared
+
+How to create BS pattern:
+- Use B for BIG, S for SMALL ONLY
+- Separate with commas: B,S,B,B
+- Only B and S allowed - no colours
+
+Choose an option to manage your BS pattern:`;
+
+        await this.bot.sendMessage(chatId, bsInfo, {
+            reply_markup: this.getBsPatternKeyboard()
+        });
+    }
+
+    async showColourFormula(chatId, userId) {
+        const patternsData = await this.getFormulaPatterns(userId);
+        const colourPattern = patternsData.colour_pattern || "Not set";
+        
+        const colourInfo = `Colour Formula Pattern Mode
+
+Current Colour Pattern: ${colourPattern}
+
+To use Colour Formula Mode:
+1. Set your Colour Pattern first (G,R,V only)
+2. Bot will follow the pattern automatically
+3. Pattern will loop until cleared
+
+How to create Colour pattern:
+- Use G for GREEN, R for RED, V for VIOLET ONLY
+- Separate with commas: G,R,V,R
+- Only G, R, and V allowed - no BIG/SMALL
+
+Choose an option to manage your Colour pattern:`;
+
+        await this.bot.sendMessage(chatId, colourInfo, {
+            reply_markup: this.getColourPatternKeyboard()
+        });
+    }
+
+    async viewBsPattern(chatId, userId) {
+        const patternsData = await this.getFormulaPatterns(userId);
+        
+        if (patternsData.bs_pattern) {
+            await this.bot.sendMessage(chatId, `Current BS Pattern: ${patternsData.bs_pattern}\nCurrent Position: ${patternsData.bs_current_index}`);
+        } else {
+            await this.bot.sendMessage(chatId, "No BS Pattern Set");
+        }
+    }
+
+    async viewColourPattern(chatId, userId) {
+        const patternsData = await this.getFormulaPatterns(userId);
+        
+        if (patternsData.colour_pattern) {
+            await this.bot.sendMessage(chatId, `Current Colour Pattern: ${patternsData.colour_pattern}\nCurrent Position: ${patternsData.colour_current_index}`);
+        } else {
+            await this.bot.sendMessage(chatId, "No Colour Pattern Set");
+        }
+    }
+
+    async clearBsPattern(chatId, userId) {
+        await this.clearFormulaPatterns(userId, 'bs');
+        await this.bot.sendMessage(chatId, "BS Pattern cleared successfully!", {
+            reply_markup: this.getBsPatternKeyboard()
+        });
+    }
+
+    async clearColourPattern(chatId, userId) {
+        await this.clearFormulaPatterns(userId, 'colour');
+        await this.bot.sendMessage(chatId, "Colour Pattern cleared successfully!", {
+            reply_markup: this.getColourPatternKeyboard()
+        });
+    }
+
+    async showBotStats(chatId, userId) {
+        const botSession = await this.getBotSession(userId);
+        
+        const statsText = `Bot Statistics
+
+Session Data:
+- Session Profit: ${botSession.session_profit.toLocaleString()} K
+- Session Loss: ${botSession.session_loss.toLocaleString()} K
+- Net Profit: ${(botSession.session_profit - botSession.session_loss).toLocaleString()} K
+- Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}
+
+*Session statistics reset when bot starts*`;
+
+        await this.bot.sendMessage(chatId, statsText, { parse_mode: 'Markdown' });
+    }
+
+    async resetBotStats(chatId, userId) {
+        await this.resetSessionStats(userId);
+        await this.bot.sendMessage(chatId, "Bot session statistics reset to zero!", {
+            reply_markup: this.getBotSettingsKeyboard()
+        });
+    }
+
+    async showSlLayer(chatId, userId) {
+        const slPatternData = await this.getSlPattern(userId);
+        const patternsData = await this.getFormulaPatterns(userId);
+        
+        const patternText = slPatternData.pattern || "Not set";
+        const bsPattern = patternsData.bs_pattern || "Not set";
+        const colourPattern = patternsData.colour_pattern || "Not set";
+        
+        const slInfo = `SL Layer Bot System
+
+Current Status:
+- BS Pattern: ${bsPattern}
+- Colour Pattern: ${colourPattern}
+- SL Pattern: ${patternText}
+
+Auto Activation System:
+- Set your SL Pattern here
+- Set BS Pattern or Colour Pattern in Bot Settings
+- Press Run Bot
+- System automatically chooses SL Layer or Normal Bot
+
+Manage your SL Pattern:`;
+
+        await this.bot.sendMessage(chatId, slInfo, {
+            reply_markup: this.getSlLayerKeyboard()
+        });
+    }
+
+    async setSlPattern(chatId, userId) {
+        userSessions[userId].step = 'set_sl_pattern';
+        const currentPattern = (await this.getSlPattern(userId)).pattern;
+        
+        await this.bot.sendMessage(chatId, `Set SL Pattern\n\nCurrent pattern: ${currentPattern}\n\nEnter your SL pattern (comma separated numbers 1-5):\nExample: 2,1,3\nExample: 1,2,3,4,5\n\nEnter your SL pattern:`);
+    }
+
+    async viewSlPattern(chatId, userId) {
+        const slPatternData = await this.getSlPattern(userId);
+        const patternText = slPatternData.pattern || "Not set";
+        
+        await this.bot.sendMessage(chatId, `Current SL Pattern: ${patternText}\nCurrent SL: ${slPatternData.current_sl}\nWait Loss Count: ${slPatternData.wait_loss_count}\nBet Count: ${slPatternData.bet_count}`);
+    }
+
+    async resetSlPattern(chatId, userId) {
+        await this.resetSlPatternData(userId);
+        await this.bot.sendMessage(chatId, "SL Pattern reset successfully!", {
+            reply_markup: this.getSlLayerKeyboard()
+        });
+    }
+
+    async showSlStats(chatId, userId) {
+        await this.viewSlPattern(chatId, userId);
+    }
+
+    async showLanguageMenu(chatId, userId) {
+        const languageInfo = `Choose Your Language
+
+Please select your preferred language:
+
+- English - English language
+- Burmese - မြန်မာစာ  
+- Chinese - 中文
+- Thailand - ภาษาไทย
+- Pakistan - اردو
+
+Select your language below:`;
+
+        await this.bot.sendMessage(chatId, languageInfo, {
+            reply_markup: this.getLanguageKeyboard()
+        });
+    }
+
+    async setEnglishLanguage(chatId, userId) {
+        await this.saveUserSetting(userId, 'language', 'english');
+        await this.bot.sendMessage(chatId, "Language set to English\n\nAll bot messages will now be displayed in English.", {
+            reply_markup: this.getMainKeyboard()
+        });
+    }
+
+    async setBurmeseLanguage(chatId, userId) {
+        await this.saveUserSetting(userId, 'language', 'burmese');
+        await this.bot.sendMessage(chatId, "ဘာသာစကား ပြောင်းလဲပြီးပါပြီ\n\nဘော့သတင်းစကားအားလုံးကို မြန်မာဘာသာဖြင့် ပြသပေးပါမည်။", {
+            reply_markup: this.getMainKeyboard()
+        });
+    }
+
+    async setChineseLanguage(chatId, userId) {
+        await this.saveUserSetting(userId, 'language', 'chinese');
+        await this.bot.sendMessage(chatId, "语言已设置为中文\n\n所有机器人消息现在将以中文显示。", {
+            reply_markup: this.getMainKeyboard()
+        });
+    }
+
+    async setThaiLanguage(chatId, userId) {
+        await this.saveUserSetting(userId, 'language', 'thai');
+        await this.bot.sendMessage(chatId, "ตั้งค่าภาษาเป็นไทยแล้ว\n\nข้อความบอททั้งหมดจะแสดงเป็นภาษาไทย", {
+            reply_markup: this.getMainKeyboard()
+        });
+    }
+
+    async setPakistanLanguage(chatId, userId) {
+        await this.saveUserSetting(userId, 'language', 'urdu');
+        await this.bot.sendMessage(chatId, "زبان اردو میں تبدیل کر دی گئی\n\nتمام بوٹ کے پیغامات اب اردو میں دکھائے جائیں گے۔", {
+            reply_markup: this.getMainKeyboard()
+        });
+    }
+
+    async showBotInfo(chatId, userId) {
+        const userSession = userSessions[userId];
+        
+        try {
+            let userInfo = {};
+            let balance = 0;
+            if (userSession.loggedIn && userSession.apiInstance) {
+                balance = await userSession.apiInstance.getBalance();
+                userInfo = await userSession.apiInstance.getUserInfo();
+            }
+
+            const user_id_display = userInfo.userId || 'N/A';
+            const phone = userSession.phone || 'Not logged in';
+            
+            const botSession = await this.getBotSession(userId);
+            const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
+            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
+            const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
+            const currentAmount = await this.getCurrentBetAmount(userId);
+
+            const modeText = {
+                'big': "Random BIG Only",
+                'small': "Random SMALL Only", 
+                'bot': "Random Bot",
+                'follow': "Follow Bot"
+            }[randomMode] || "Random Bot";
+
+            const botInfoText = `BOT INFORMATION
+
+User Info:
+- User ID: ${user_id_display}
+- Phone: ${phone}
+- Platform: 777 Big Win
+- Balance: ${balance.toLocaleString()} K
+
+Bot Settings:
+- Mode: ${modeText}
+- Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}
+- Bet Sequence: ${betSequence}
+- Current Bet: ${currentAmount} K (Step ${currentIndex + 1})
+
+Bot Statistics:
+- Session Profit: ${botSession.session_profit.toLocaleString()} K
+- Session Loss: ${botSession.session_loss.toLocaleString()} K
+- Net Profit: ${(botSession.session_profit - botSession.session_loss).toLocaleString()} K
+- Total Bets: ${botSession.total_bets}
+
+Last Update: ${new Date().toLocaleString()}`;
+
+            await this.bot.sendMessage(chatId, botInfoText, { parse_mode: 'Markdown' });
+            
+        } catch (error) {
+            await this.bot.sendMessage(chatId, "Error loading bot information. Please try again.");
         }
     }
 
@@ -1327,6 +1906,41 @@ Choose your betting mode:`;
         await this.saveBotSession(userId, true, newTotalBets, newTotalProfit, newSessionProfit, newSessionLoss);
     }
 
+    async getFormulaPatterns(userId) {
+        const result = await this.db.get(
+            'SELECT bs_pattern, colour_pattern, bs_current_index, colour_current_index FROM formula_patterns WHERE user_id = ?',
+            [userId]
+        );
+        
+        if (result) {
+            return {
+                bs_pattern: result.bs_pattern || "",
+                colour_pattern: result.colour_pattern || "",
+                bs_current_index: result.bs_current_index || 0,
+                colour_current_index: result.colour_current_index || 0
+            };
+        }
+        
+        return { bs_pattern: "", colour_pattern: "", bs_current_index: 0, colour_current_index: 0 };
+    }
+
+    async saveFormulaPatterns(userId, bsPattern = "", colourPattern = "") {
+        const existing = await this.db.get('SELECT user_id FROM formula_patterns WHERE user_id = ?', [userId]);
+        
+        if (existing) {
+            await this.db.run(
+                'UPDATE formula_patterns SET bs_pattern = ?, colour_pattern = ?, bs_current_index = 0, colour_current_index = 0, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+                [bsPattern, colourPattern, userId]
+            );
+        } else {
+            await this.db.run(
+                'INSERT INTO formula_patterns (user_id, bs_pattern, colour_pattern) VALUES (?, ?, ?)',
+                [userId, bsPattern, colourPattern]
+            );
+        }
+        return true;
+    }
+
     async clearFormulaPatterns(userId, patternType = null) {
         if (patternType === 'bs') {
             await this.db.run('UPDATE formula_patterns SET bs_pattern = "", bs_current_index = 0 WHERE user_id = ?', [userId]);
@@ -1335,6 +1949,51 @@ Choose your betting mode:`;
         } else {
             await this.db.run('UPDATE formula_patterns SET bs_pattern = "", colour_pattern = "", bs_current_index = 0, colour_current_index = 0 WHERE user_id = ?', [userId]);
         }
+        return true;
+    }
+
+    async getSlPattern(userId) {
+        const result = await this.db.get(
+            'SELECT pattern, current_sl, current_index, wait_loss_count, bet_count FROM sl_patterns WHERE user_id = ?',
+            [userId]
+        );
+        
+        if (result) {
+            return {
+                pattern: result.pattern || '',
+                current_sl: result.current_sl || 1,
+                current_index: result.current_index || 0,
+                wait_loss_count: result.wait_loss_count || 0,
+                bet_count: result.bet_count || 0
+            };
+        }
+        
+        return { pattern: '', current_sl: 1, current_index: 0, wait_loss_count: 0, bet_count: 0 };
+    }
+
+    async saveSlPattern(userId, pattern) {
+        const existing = await this.db.get('SELECT user_id FROM sl_patterns WHERE user_id = ?', [userId]);
+        
+        if (existing) {
+            await this.db.run(
+                'UPDATE sl_patterns SET pattern = ?, current_sl = 1, current_index = 0, wait_loss_count = 0, bet_count = 0 WHERE user_id = ?',
+                [pattern, userId]
+            );
+        } else {
+            await this.db.run(
+                'INSERT INTO sl_patterns (user_id, pattern) VALUES (?, ?)',
+                [userId, pattern]
+            );
+        }
+        return true;
+    }
+
+    async resetSlPatternData(userId) {
+        await this.db.run(
+            'UPDATE sl_patterns SET current_sl = 1, current_index = 0, wait_loss_count = 0, bet_count = 0 WHERE user_id = ?',
+            [userId]
+        );
+        return true;
     }
 
     async isGameIdAllowed(gameId) {
@@ -1757,20 +2416,24 @@ Choose your betting mode:`;
 }
 
 // Start the bot
-const bot = new AutoLotteryBot();
-
 console.log("Auto Lottery Bot starting...");
 console.log("Game ID Restriction System: ✅ ENABLED");
 console.log("Admin Commands: /addgameid, /removegameid, /listgameids, /gameidstats");
 console.log(`Admin User ID: ${ADMIN_USER_ID}`);
 console.log("Features: Wait for Win/Loss before next bet");
 console.log("Modes: BIG Only, SMALL Only, Random Bot, Follow Bot");
+console.log("BS Formula Pattern Betting System (B,S only)");
+console.log("Colour Formula Pattern Betting System (G,R,V only)");
+console.log("SL Layer Pattern Betting System");
 console.log("Bet Sequence System: 100,300,700,1600,3200,7600,16000,32000");
 console.log("Profit/Loss Target System");
 console.log("Auto Statistics Tracking");
 console.log("Colour Betting Support (RED, GREEN, VIOLET)");
 console.log("Supported Platform: 777 Big Win ONLY");
+console.log("Multi-language Support: English, Burmese, Chinese, Thai, Urdu");
 console.log("Press Ctrl+C to stop.");
+
+const bot = new AutoLotteryBot();
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {
