@@ -539,6 +539,7 @@ Press Run Bot to start auto betting!`;
                 [{ text: "Random BIG" }, { text: "Random SMALL" }],
                 [{ text: "Random Bot" }, { text: "Follow Bot" }],
                 [{ text: "BS Formula" }, { text: "Colour Formula" }],
+                [{ text: "SL Layer Mode" }],
                 [{ text: "Bot Stats" }, { text: "Set Bet Sequence" }],
                 [{ text: "Profit Target" }, { text: "Loss Target" }],
                 [{ text: "Reset Stats" }, { text: "Main Menu" }]
@@ -791,11 +792,15 @@ Press Run Bot to start auto betting!`;
                 break;
 
             case "BS Formula":
-                await this.showBsFormula(chatId, userId);
+                await this.setBsFormulaMode(chatId, userId);
                 break;
 
             case "Colour Formula":
-                await this.showColourFormula(chatId, userId);
+                await this.setColourFormulaMode(chatId, userId);
+                break;
+
+            case "SL Layer Mode":
+                await this.setSlLayerMode(chatId, userId);
                 break;
 
             case "Bot Stats":
@@ -1208,48 +1213,48 @@ Potential Profit: +${potentialProfit.toLocaleString()} K`;
     }
 
     async showBotSettings(chatId, userId) {
-    try {
-        const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
-        const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
-        const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
-        const currentAmount = await this.getCurrentBetAmount(userId);
-        
-        // Profit/Loss Target တွေကိုလည်းယူ
-        const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
-        const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
+        try {
+            const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
+            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
+            const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
+            const currentAmount = await this.getCurrentBetAmount(userId);
+            
+            // Profit/Loss Target တွေကိုလည်းယူ
+            const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
+            const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
 
-        const botSession = await this.getBotSession(userId);
+            const botSession = await this.getBotSession(userId);
 
-        // Formula patterns တွေကိုလည်းယူ
-        const formulaPatterns = await this.getFormulaPatterns(userId);
-        const bsPattern = formulaPatterns.bs_pattern || "Not set";
-        const colourPattern = formulaPatterns.colour_pattern || "Not set";
+            // Formula patterns တွေကိုလည်းယူ
+            const formulaPatterns = await this.getFormulaPatterns(userId);
+            const bsPattern = formulaPatterns.bs_pattern || "Not set";
+            const colourPattern = formulaPatterns.colour_pattern || "Not set";
 
-        // SL Pattern data ကိုလည်းယူ
-        const slPatternData = await this.getSlPattern(userId);
-        const slPattern = slPatternData.pattern || "Not set";
+            // SL Pattern data ကိုလည်းယူ
+            const slPatternData = await this.getSlPattern(userId);
+            const slPattern = slPatternData.pattern || "Not set";
 
-        const modeText = {
-            'big': "Random BIG Only",
-            'small': "Random SMALL Only", 
-            'bot': "Random Bot",
-            'follow': "Follow Bot",
-            'bs_formula': "BS Formula Pattern",
-            'colour_formula': "Colour Formula Pattern",
-            'sl_layer': "SL Layer Pattern"  // Add this line
-        }[randomMode] || "Random Bot";
+            const modeText = {
+                'big': "Random BIG Only",
+                'small': "Random SMALL Only", 
+                'bot': "Random Bot",
+                'follow': "Follow Bot",
+                'bs_formula': "BS Formula Pattern",
+                'colour_formula': "Colour Formula Pattern",
+                'sl_layer': "SL Layer Pattern"
+            }[randomMode] || "Random Bot";
 
-        // Formula mode ဖြစ်နေရင် pattern information ထည့်ပါ
-        let formulaInfo = "";
-        if (randomMode === 'bs_formula' && bsPattern) {
-            formulaInfo = `\nBS Pattern: ${bsPattern}\nCurrent Position: ${formulaPatterns.bs_current_index + 1}`;
-        } else if (randomMode === 'colour_formula' && colourPattern) {
-            formulaInfo = `\nColour Pattern: ${colourPattern}\nCurrent Position: ${formulaPatterns.colour_current_index + 1}`;
-        } else if (randomMode === 'sl_layer' && slPattern) {
-            formulaInfo = `\nSL Pattern: ${slPattern}\nCurrent SL: ${slPatternData.current_sl}\nWait Loss Count: ${slPatternData.wait_loss_count}\nBet Count: ${slPatternData.bet_count}`;
-        }
+            // Formula mode ဖြစ်နေရင် pattern information ထည့်ပါ
+            let formulaInfo = "";
+            if (randomMode === 'bs_formula' && bsPattern) {
+                formulaInfo = `\nBS Pattern: ${bsPattern}\nCurrent Position: ${formulaPatterns.bs_current_index + 1}`;
+            } else if (randomMode === 'colour_formula' && colourPattern) {
+                formulaInfo = `\nColour Pattern: ${colourPattern}\nCurrent Position: ${formulaPatterns.colour_current_index + 1}`;
+            } else if (randomMode === 'sl_layer' && slPattern) {
+                formulaInfo = `\nSL Pattern: ${slPattern}\nCurrent SL: ${slPatternData.current_sl}\nWait Loss Count: ${slPatternData.wait_loss_count}\nBet Count: ${slPatternData.bet_count}`;
+            }
 
-        const settingsText = `Bot Settings
+            const settingsText = `Bot Settings
 
 Current Settings:
 - Betting Mode: ${modeText}${formulaInfo}
@@ -1270,13 +1275,13 @@ Targets will auto-stop bot when reached
 
 Choose your betting mode:`;
 
-        await this.bot.sendMessage(chatId, settingsText, {
-            reply_markup: this.getBotSettingsKeyboard()
-        });
-    } catch (error) {
-        await this.bot.sendMessage(chatId, "Error loading bot settings. Please try again.");
+            await this.bot.sendMessage(chatId, settingsText, {
+                reply_markup: this.getBotSettingsKeyboard()
+            });
+        } catch (error) {
+            await this.bot.sendMessage(chatId, "Error loading bot settings. Please try again.");
+        }
     }
-}
 
     async showMyBets(chatId, userId) {
         const userSession = userSessions[userId];
@@ -1335,7 +1340,10 @@ Choose your betting mode:`;
             'big': "Random BIG Only",
             'small': "Random SMALL Only", 
             'bot': "Random Bot",
-            'follow': "Follow Bot"
+            'follow': "Follow Bot",
+            'bs_formula': "BS Formula Pattern",
+            'colour_formula': "Colour Formula Pattern",
+            'sl_layer': "SL Layer Pattern"
         }[randomMode] || "Random Bot";
 
         await this.bot.sendMessage(chatId, `Auto Bot Started!\n\nMode: ${modeText}\nStatus: RUNNING\n\nBot will start placing bets automatically.`);
@@ -1386,6 +1394,72 @@ Choose your betting mode:`;
         await this.clearFormulaPatterns(userId);
         
         await this.bot.sendMessage(chatId, "Random Mode Set\n\n- Follow Bot - Follow Last Result\n\nBot will now follow the last game result in auto mode.");
+    }
+
+    async setBsFormulaMode(chatId, userId) {
+        const patternsData = await this.getFormulaPatterns(userId);
+        
+        if (!patternsData.bs_pattern) {
+            await this.bot.sendMessage(chatId, "Please set your BS Pattern first before using BS Formula Mode!\n\nGo to Bot Settings → BS Formula → Set BS Pattern", {
+                reply_markup: this.getBotSettingsKeyboard()
+            });
+            return;
+        }
+
+        await this.saveUserSetting(userId, 'random_betting', 'bs_formula');
+        
+        await this.bot.sendMessage(chatId, `BS Formula Mode Activated!\n\nBS Pattern: ${patternsData.bs_pattern}\nCurrent Position: ${patternsData.bs_current_index + 1}\n\nBot will now follow your BS pattern automatically.`, {
+            reply_markup: this.getBotSettingsKeyboard()
+        });
+    }
+
+    async setColourFormulaMode(chatId, userId) {
+        const patternsData = await this.getFormulaPatterns(userId);
+        
+        if (!patternsData.colour_pattern) {
+            await this.bot.sendMessage(chatId, "Please set your Colour Pattern first before using Colour Formula Mode!\n\nGo to Bot Settings → Colour Formula → Set Colour Pattern", {
+                reply_markup: this.getBotSettingsKeyboard()
+            });
+            return;
+        }
+
+        await this.saveUserSetting(userId, 'random_betting', 'colour_formula');
+        
+        await this.bot.sendMessage(chatId, `Colour Formula Mode Activated!\n\nColour Pattern: ${patternsData.colour_pattern}\nCurrent Position: ${patternsData.colour_current_index + 1}\n\nBot will now follow your Colour pattern automatically.`, {
+            reply_markup: this.getBotSettingsKeyboard()
+        });
+    }
+
+    async setSlLayerMode(chatId, userId) {
+        const slPatternData = await this.getSlPattern(userId);
+        const formulaPatterns = await this.getFormulaPatterns(userId);
+        
+        if (!slPatternData.pattern) {
+            await this.bot.sendMessage(chatId, "Please set your SL Pattern first before using SL Layer Mode!\n\nGo to SL Layer → Set SL Pattern", {
+                reply_markup: this.getBotSettingsKeyboard()
+            });
+            return;
+        }
+
+        if (!formulaPatterns.bs_pattern && !formulaPatterns.colour_pattern) {
+            await this.bot.sendMessage(chatId, "Please set either BS Pattern or Colour Pattern first!\n\nGo to Bot Settings → BS Formula or Colour Formula to set your pattern.", {
+                reply_markup: this.getBotSettingsKeyboard()
+            });
+            return;
+        }
+
+        await this.saveUserSetting(userId, 'random_betting', 'sl_layer');
+        
+        let patternType = "BS Pattern";
+        let patternValue = formulaPatterns.bs_pattern;
+        if (!formulaPatterns.bs_pattern && formulaPatterns.colour_pattern) {
+            patternType = "Colour Pattern";
+            patternValue = formulaPatterns.colour_pattern;
+        }
+        
+        await this.bot.sendMessage(chatId, `SL Layer Mode Activated!\n\nSL Pattern: ${slPatternData.pattern}\n${patternType}: ${patternValue}\nCurrent SL: ${slPatternData.current_sl}\n\nBot will now use SL Layer system with your patterns.`, {
+            reply_markup: this.getBotSettingsKeyboard()
+        });
     }
 
     async handleSetBetSequence(chatId, userId, text) {
@@ -1593,7 +1667,7 @@ Choose an option to manage your Colour pattern:`;
         const patternsData = await this.getFormulaPatterns(userId);
         
         if (patternsData.bs_pattern) {
-            await this.bot.sendMessage(chatId, `Current BS Pattern: ${patternsData.bs_pattern}\nCurrent Position: ${patternsData.bs_current_index}`);
+            await this.bot.sendMessage(chatId, `Current BS Pattern: ${patternsData.bs_pattern}\nCurrent Position: ${patternsData.bs_current_index + 1}`);
         } else {
             await this.bot.sendMessage(chatId, "No BS Pattern Set");
         }
@@ -1603,7 +1677,7 @@ Choose an option to manage your Colour pattern:`;
         const patternsData = await this.getFormulaPatterns(userId);
         
         if (patternsData.colour_pattern) {
-            await this.bot.sendMessage(chatId, `Current Colour Pattern: ${patternsData.colour_pattern}\nCurrent Position: ${patternsData.colour_current_index}`);
+            await this.bot.sendMessage(chatId, `Current Colour Pattern: ${patternsData.colour_pattern}\nCurrent Position: ${patternsData.colour_current_index + 1}`);
         } else {
             await this.bot.sendMessage(chatId, "No Colour Pattern Set");
         }
@@ -1779,91 +1853,91 @@ Select your language below:`;
     }
 
     async showBotInfo(chatId, userId) {
-    const userSession = userSessions[userId];
-    
-    try {
-        let userInfo = {};
-        let balance = 0;
-        if (userSession.loggedIn && userSession.apiInstance) {
-            balance = await userSession.apiInstance.getBalance();
-            userInfo = await userSession.apiInstance.getUserInfo();
-        }
-
-        const user_id_display = userInfo.userId || 'N/A';
-        const phone = userSession.phone || 'Not logged in';
+        const userSession = userSessions[userId];
         
-        const botSession = await this.getBotSession(userId);
-        const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
-        const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
-        const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
-        const currentAmount = await this.getCurrentBetAmount(userId);
-        
-        // Profit/Loss Target တွေကိုလည်းယူ
-        const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
-        const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
-
-        // Formula patterns တွေကိုလည်းယူ
-        const formulaPatterns = await this.getFormulaPatterns(userId);
-        const bsPattern = formulaPatterns.bs_pattern || "Not set";
-        const colourPattern = formulaPatterns.colour_pattern || "Not set";
-
-        // SL Pattern data ကိုလည်းယူ
-        const slPatternData = await this.getSlPattern(userId);
-        const slPattern = slPatternData.pattern || "Not set";
-
-        const modeText = {
-            'big': "Random BIG Only",
-            'small': "Random SMALL Only", 
-            'bot': "Random Bot",
-            'follow': "Follow Bot",
-            'bs_formula': "BS Formula Pattern",
-            'colour_formula': "Colour Formula Pattern",
-            'sl_layer': "SL Layer Pattern"
-        }[randomMode] || "Random Bot";
-
-        const netProfit = botSession.session_profit - botSession.session_loss;
-        
-        // Formula mode information
-        let formulaInfo = "";
-        if (randomMode === 'bs_formula') {
-            formulaInfo = `\n- BS Pattern: ${bsPattern}`;
-            formulaInfo += `\n- Current Position: ${formulaPatterns.bs_current_index + 1}`;
-        } else if (randomMode === 'colour_formula') {
-            formulaInfo = `\n- Colour Pattern: ${colourPattern}`;
-            formulaInfo += `\n- Current Position: ${formulaPatterns.colour_current_index + 1}`;
-        } else if (randomMode === 'sl_layer') {
-            formulaInfo = `\n- SL Pattern: ${slPattern}`;
-            formulaInfo += `\n- Current SL: ${slPatternData.current_sl}`;
-            formulaInfo += `\n- Wait Loss Count: ${slPatternData.wait_loss_count}`;
-            formulaInfo += `\n- Bet Count: ${slPatternData.bet_count}`;
-            
-            // SL Bet Session information
-            const slSession = await this.getSlBetSession(userId);
-            if (slSession.is_wait_mode) {
-                formulaInfo += `\n- Wait Mode: ACTIVE`;
-                formulaInfo += `\n- Wait Bet Type: ${slSession.wait_bet_type}`;
-                formulaInfo += `\n- Wait Amount: ${slSession.wait_amount.toLocaleString()} K`;
-                formulaInfo += `\n- Wait Total Profit: ${slSession.wait_total_profit.toLocaleString()} K`;
-            } else {
-                formulaInfo += `\n- Wait Mode: INACTIVE`;
+        try {
+            let userInfo = {};
+            let balance = 0;
+            if (userSession.loggedIn && userSession.apiInstance) {
+                balance = await userSession.apiInstance.getBalance();
+                userInfo = await userSession.apiInstance.getUserInfo();
             }
-        }
 
-        // Target progress calculation
-        let profitProgress = "N/A";
-        let lossProgress = "N/A";
-        
-        if (profitTarget > 0) {
-            const progress = Math.min(100, Math.round((netProfit / profitTarget) * 100));
-            profitProgress = `${progress}% (${netProfit.toLocaleString()}/${profitTarget.toLocaleString()} K)`;
-        }
-        
-        if (lossTarget > 0) {
-            const progress = Math.min(100, Math.round((botSession.session_loss / lossTarget) * 100));
-            lossProgress = `${progress}% (${botSession.session_loss.toLocaleString()}/${lossTarget.toLocaleString()} K)`;
-        }
+            const user_id_display = userInfo.userId || 'N/A';
+            const phone = userSession.phone || 'Not logged in';
+            
+            const botSession = await this.getBotSession(userId);
+            const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
+            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
+            const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
+            const currentAmount = await this.getCurrentBetAmount(userId);
+            
+            // Profit/Loss Target တွေကိုလည်းယူ
+            const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
+            const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
 
-        const botInfoText = `BOT INFORMATION
+            // Formula patterns တွေကိုလည်းယူ
+            const formulaPatterns = await this.getFormulaPatterns(userId);
+            const bsPattern = formulaPatterns.bs_pattern || "Not set";
+            const colourPattern = formulaPatterns.colour_pattern || "Not set";
+
+            // SL Pattern data ကိုလည်းယူ
+            const slPatternData = await this.getSlPattern(userId);
+            const slPattern = slPatternData.pattern || "Not set";
+
+            const modeText = {
+                'big': "Random BIG Only",
+                'small': "Random SMALL Only", 
+                'bot': "Random Bot",
+                'follow': "Follow Bot",
+                'bs_formula': "BS Formula Pattern",
+                'colour_formula': "Colour Formula Pattern",
+                'sl_layer': "SL Layer Pattern"
+            }[randomMode] || "Random Bot";
+
+            const netProfit = botSession.session_profit - botSession.session_loss;
+            
+            // Formula mode information
+            let formulaInfo = "";
+            if (randomMode === 'bs_formula') {
+                formulaInfo = `\n- BS Pattern: ${bsPattern}`;
+                formulaInfo += `\n- Current Position: ${formulaPatterns.bs_current_index + 1}`;
+            } else if (randomMode === 'colour_formula') {
+                formulaInfo = `\n- Colour Pattern: ${colourPattern}`;
+                formulaInfo += `\n- Current Position: ${formulaPatterns.colour_current_index + 1}`;
+            } else if (randomMode === 'sl_layer') {
+                formulaInfo = `\n- SL Pattern: ${slPattern}`;
+                formulaInfo += `\n- Current SL: ${slPatternData.current_sl}`;
+                formulaInfo += `\n- Wait Loss Count: ${slPatternData.wait_loss_count}`;
+                formulaInfo += `\n- Bet Count: ${slPatternData.bet_count}`;
+                
+                // SL Bet Session information
+                const slSession = await this.getSlBetSession(userId);
+                if (slSession.is_wait_mode) {
+                    formulaInfo += `\n- Wait Mode: ACTIVE`;
+                    formulaInfo += `\n- Wait Bet Type: ${slSession.wait_bet_type}`;
+                    formulaInfo += `\n- Wait Amount: ${slSession.wait_amount.toLocaleString()} K`;
+                    formulaInfo += `\n- Wait Total Profit: ${slSession.wait_total_profit.toLocaleString()} K`;
+                } else {
+                    formulaInfo += `\n- Wait Mode: INACTIVE`;
+                }
+            }
+
+            // Target progress calculation
+            let profitProgress = "N/A";
+            let lossProgress = "N/A";
+            
+            if (profitTarget > 0) {
+                const progress = Math.min(100, Math.round((netProfit / profitTarget) * 100));
+                profitProgress = `${progress}% (${netProfit.toLocaleString()}/${profitTarget.toLocaleString()} K)`;
+            }
+            
+            if (lossTarget > 0) {
+                const progress = Math.min(100, Math.round((botSession.session_loss / lossTarget) * 100));
+                lossProgress = `${progress}% (${botSession.session_loss.toLocaleString()}/${lossTarget.toLocaleString()} K)`;
+            }
+
+            const botInfoText = `BOT INFORMATION
 
 User Info:
 - User ID: ${user_id_display}
@@ -1889,12 +1963,12 @@ Bot Statistics:
 
 Last Update: ${new Date().toLocaleString()}`;
 
-        await this.bot.sendMessage(chatId, botInfoText);
-        
-    } catch (error) {
-        await this.bot.sendMessage(chatId, "Error loading bot information. Please try again.");
+            await this.bot.sendMessage(chatId, botInfoText);
+            
+        } catch (error) {
+            await this.bot.sendMessage(chatId, "Error loading bot information. Please try again.");
+        }
     }
-}
 
     // Database helper methods
     async saveUserCredentials(userId, phone, password, platform = '777') {
@@ -2138,6 +2212,42 @@ Last Update: ${new Date().toLocaleString()}`;
         return true;
     }
 
+    async getSlBetSession(userId) {
+        const result = await this.db.get(
+            'SELECT is_wait_mode, wait_bet_type, wait_issue, wait_amount, wait_total_profit FROM sl_bet_sessions WHERE user_id = ?',
+            [userId]
+        );
+        
+        if (result) {
+            return {
+                is_wait_mode: Boolean(result.is_wait_mode),
+                wait_bet_type: result.wait_bet_type || '',
+                wait_issue: result.wait_issue || '',
+                wait_amount: result.wait_amount || 0,
+                wait_total_profit: result.wait_total_profit || 0
+            };
+        }
+        
+        return { is_wait_mode: false, wait_bet_type: '', wait_issue: '', wait_amount: 0, wait_total_profit: 0 };
+    }
+
+    async updateSlPatternData(userId, currentIndex, currentSL, waitLossCount, betCount) {
+        const existing = await this.db.get('SELECT user_id FROM sl_patterns WHERE user_id = ?', [userId]);
+        
+        if (existing) {
+            await this.db.run(
+                'UPDATE sl_patterns SET current_index = ?, current_sl = ?, wait_loss_count = ?, bet_count = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+                [currentIndex, currentSL, waitLossCount, betCount, userId]
+            );
+        } else {
+            await this.db.run(
+                'INSERT INTO sl_patterns (user_id, current_index, current_sl, wait_loss_count, bet_count) VALUES (?, ?, ?, ?, ?)',
+                [userId, currentIndex, currentSL, waitLossCount, betCount]
+            );
+        }
+        return true;
+    }
+
     async isGameIdAllowed(gameId) {
         const allowedIds = await this.getAllowedGameIds();
         const gameIdStr = String(gameId).trim();
@@ -2317,9 +2427,27 @@ Last Update: ${new Date().toLocaleString()}`;
             const followResult = await this.getFollowBetType(userSession.apiInstance);
             betType = followResult.betType;
             betTypeStr = followResult.betTypeStr;
+        } else if (randomMode === 'bs_formula') {
+            const bsResult = await this.getBsFormulaBetType(userId);
+            betType = bsResult.betType;
+            betTypeStr = bsResult.betTypeStr;
+        } else if (randomMode === 'colour_formula') {
+            const colourResult = await this.getColourFormulaBetType(userId);
+            betType = colourResult.betType;
+            betTypeStr = colourResult.betTypeStr;
+        } else if (randomMode === 'sl_layer') {
+            const slResult = await this.getSlLayerBetType(userId);
+            betType = slResult.betType;
+            betTypeStr = slResult.betTypeStr;
         } else {
             betType = Math.random() < 0.5 ? 13 : 14;
             betTypeStr = betType === 13 ? "BIG" : "SMALL";
+        }
+
+        // Skip if SL Layer returns null bet type (wait mode)
+        if (betType === null) {
+            waitingForResults[userId] = false;
+            return;
         }
 
         const amount = await this.getCurrentBetAmount(userId);
@@ -2376,6 +2504,174 @@ Last Update: ${new Date().toLocaleString()}`;
         } catch (error) {
             const betType = Math.random() < 0.5 ? 13 : 14;
             return { betType, betTypeStr: betType === 13 ? "BIG" : "SMALL" };
+        }
+    }
+
+    async getBsFormulaBetType(userId) {
+        const patternsData = await this.getFormulaPatterns(userId);
+        const pattern = patternsData.bs_pattern;
+        let currentIndex = patternsData.bs_current_index || 0;
+        
+        if (!pattern) {
+            return { betType: 13, betTypeStr: "BIG" }; // Default to BIG if no pattern
+        }
+        
+        const patternArray = pattern.split(',').map(p => p.trim().toUpperCase());
+        
+        if (currentIndex >= patternArray.length) {
+            currentIndex = 0;
+        }
+        
+        const currentBet = patternArray[currentIndex];
+        
+        // Update index for next bet
+        const newIndex = (currentIndex + 1) % patternArray.length;
+        await this.db.run(
+            'UPDATE formula_patterns SET bs_current_index = ? WHERE user_id = ?',
+            [newIndex, userId]
+        );
+        
+        if (currentBet === 'B') {
+            return { betType: 13, betTypeStr: "BIG (BS Formula)" };
+        } else if (currentBet === 'S') {
+            return { betType: 14, betTypeStr: "SMALL (BS Formula)" };
+        } else {
+            return { betType: 13, betTypeStr: "BIG" }; // Default fallback
+        }
+    }
+
+    async getColourFormulaBetType(userId) {
+        const patternsData = await this.getFormulaPatterns(userId);
+        const pattern = patternsData.colour_pattern;
+        let currentIndex = patternsData.colour_current_index || 0;
+        
+        if (!pattern) {
+            return { betType: COLOUR_BET_TYPES["RED"], betTypeStr: "RED" }; // Default to RED if no pattern
+        }
+        
+        const patternArray = pattern.split(',').map(p => p.trim().toUpperCase());
+        
+        if (currentIndex >= patternArray.length) {
+            currentIndex = 0;
+        }
+        
+        const currentBet = patternArray[currentIndex];
+        
+        // Update index for next bet
+        const newIndex = (currentIndex + 1) % patternArray.length;
+        await this.db.run(
+            'UPDATE formula_patterns SET colour_current_index = ? WHERE user_id = ?',
+            [newIndex, userId]
+        );
+        
+        if (currentBet === 'R') {
+            return { betType: COLOUR_BET_TYPES["RED"], betTypeStr: "RED (Colour Formula)" };
+        } else if (currentBet === 'G') {
+            return { betType: COLOUR_BET_TYPES["GREEN"], betTypeStr: "GREEN (Colour Formula)" };
+        } else if (currentBet === 'V') {
+            return { betType: COLOUR_BET_TYPES["VIOLET"], betTypeStr: "VIOLET (Colour Formula)" };
+        } else {
+            return { betType: COLOUR_BET_TYPES["RED"], betTypeStr: "RED" }; // Default fallback
+        }
+    }
+
+    async getSlLayerBetType(userId) {
+        const slPatternData = await this.getSlPattern(userId);
+        const formulaPatterns = await this.getFormulaPatterns(userId);
+        const slSession = await this.getSlBetSession(userId);
+        
+        // Check if we're in wait mode
+        if (slSession.is_wait_mode) {
+            // In wait mode, return the wait bet type
+            let betType;
+            if (slSession.wait_bet_type.includes("BIG")) {
+                betType = 13;
+            } else if (slSession.wait_bet_type.includes("SMALL")) {
+                betType = 14;
+            } else if (slSession.wait_bet_type.includes("RED")) {
+                betType = COLOUR_BET_TYPES["RED"];
+            } else if (slSession.wait_bet_type.includes("GREEN")) {
+                betType = COLOUR_BET_TYPES["GREEN"];
+            } else if (slSession.wait_bet_type.includes("VIOLET")) {
+                betType = COLOUR_BET_TYPES["VIOLET"];
+            } else {
+                betType = 13; // Default fallback
+            }
+            
+            return { 
+                betType: betType, 
+                betTypeStr: `${slSession.wait_bet_type} (SL Wait Mode)` 
+            };
+        }
+        
+        // Normal SL Layer logic
+        const pattern = slPatternData.pattern;
+        let currentIndex = slPatternData.current_index || 0;
+        let currentSL = slPatternData.current_sl || 1;
+        let waitLossCount = slPatternData.wait_loss_count || 0;
+        
+        if (!pattern) {
+            return { betType: 13, betTypeStr: "BIG" }; // Default to BIG if no pattern
+        }
+        
+        const patternArray = pattern.split(',').map(p => parseInt(p.trim()));
+        
+        if (currentIndex >= patternArray.length) {
+            currentIndex = 0;
+        }
+        
+        const currentPatternValue = patternArray[currentIndex];
+        
+        // Get base bet type from BS or Colour pattern
+        let baseBetType, baseBetTypeStr;
+        if (formulaPatterns.bs_pattern) {
+            const bsResult = await this.getBsFormulaBetType(userId);
+            baseBetType = bsResult.betType;
+            baseBetTypeStr = bsResult.betTypeStr.replace(' (BS Formula)', '');
+        } else if (formulaPatterns.colour_pattern) {
+            const colourResult = await this.getColourFormulaBetType(userId);
+            baseBetType = colourResult.betType;
+            baseBetTypeStr = colourResult.betTypeStr.replace(' (Colour Formula)', '');
+        } else {
+            baseBetType = 13;
+            baseBetTypeStr = "BIG";
+        }
+        
+        // Apply SL logic
+        if (currentPatternValue === 1) {
+            // Normal bet
+            waitLossCount = 0;
+            await this.updateSlPatternData(userId, currentIndex + 1, currentSL, waitLossCount, slPatternData.bet_count + 1);
+            
+            return { 
+                betType: baseBetType, 
+                betTypeStr: `${baseBetTypeStr} (SL Layer - Normal)` 
+            };
+        } else if (currentPatternValue === 2) {
+            // Wait after 1 loss
+            if (waitLossCount >= 1) {
+                waitLossCount = 0;
+                await this.updateSlPatternData(userId, currentIndex + 1, currentSL, waitLossCount, slPatternData.bet_count + 1);
+                
+                return { 
+                    betType: baseBetType, 
+                    betTypeStr: `${baseBetTypeStr} (SL Layer - Wait 1 Loss)` 
+                };
+            } else {
+                waitLossCount++;
+                await this.updateSlPatternData(userId, currentIndex, currentSL, waitLossCount, slPatternData.bet_count);
+                
+                return { betType: null, betTypeStr: "SKIP (SL Layer - Waiting)" };
+            }
+        } else {
+            // For patterns 3,4,5 - implement your specific SL logic here
+            waitLossCount = 0;
+            await this.updateSlPatternData(userId, currentIndex + 1, currentSL, waitLossCount, slPatternData.bet_count + 1);
+            
+            return { 
+                betType: baseBetType, 
+                betTypeStr: `${baseBetTypeStr} (SL Layer - Pattern ${currentPatternValue})` 
+            };
         }
     }
 
