@@ -2545,8 +2545,6 @@ Last Update: ${new Date().toLocaleString()}`;
     }
 }
 
-        return { betType, betTypeStr, isRealBet: true, isFakeBet: false };
-
     } else {
         // WAIT PHASE - Show fake bets and check real results
         const waitSession = await this.getSlWaitSession(userId);
