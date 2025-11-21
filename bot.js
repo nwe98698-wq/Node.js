@@ -1425,8 +1425,10 @@ Choose your betting mode:`;
         const pattern = text.trim().toUpperCase();
         
         // Validate BS pattern - only B and S allowed
-        const validChars = {'B', 'S', ','};
-        if (pattern.split('').every(char => validChars.has(char) || char === ' ')) {
+        const validChars = ['B', 'S', ','];
+        const isValid = pattern.split('').every(char => validChars.includes(char) || char === ' ');
+        
+        if (isValid) {
             const cleanPattern = pattern.split(',').map(p => p.trim()).filter(p => p).join(',');
             
             if (await this.saveFormulaPatterns(userId, cleanPattern, '')) {
@@ -1446,8 +1448,10 @@ Choose your betting mode:`;
         const pattern = text.trim().toUpperCase();
         
         // Validate Colour pattern - only G, R, V allowed
-        const validChars = {'G', 'R', 'V', ','};
-        if (pattern.split('').every(char => validChars.has(char) || char === ' ')) {
+        const validChars = ['G', 'R', 'V', ','];
+        const isValid = pattern.split('').every(char => validChars.includes(char) || char === ' ');
+        
+        if (isValid) {
             const cleanPattern = pattern.split(',').map(p => p.trim()).filter(p => p).join(',');
             
             if (await this.saveFormulaPatterns(userId, '', cleanPattern)) {
