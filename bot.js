@@ -2543,9 +2543,8 @@ async processSlLayerBetting(userId, slPatternData) {
         // Should not reach here, but as fallback
         console.log(`🔍 SL Debug - Fallback to WAIT PHASE for user ${userId}`);
         return { betType: null, betTypeStr: null, isRealBet: false, isFakeBet: false };
-    }
-}
-  } else {
+           }
+          } else {
         // WAIT PHASE - Show fake bets and check real results
         const waitSession = await this.getSlWaitSession(userId);
         
