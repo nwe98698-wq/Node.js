@@ -12,7 +12,7 @@ const ADMIN_USER_ID = "6328953001";
 
 // API endpoints
 const API_ENDPOINTS = {
-    "777": "https://ckygjf6r.com/api/webapi/"
+    "777": "https://api.bigwinqaz.com/api/webapi/"
 };
 
 // Colour Bet Types
