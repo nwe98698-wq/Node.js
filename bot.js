@@ -2334,10 +2334,10 @@ Last Update: ${new Date().toLocaleString()}`;
         await this.bot.sendMessage(chatId, statsText);
     }
 
-    // NEW: Enhanced SL Layer Betting Logic
+    // NEW: Enhanced SL Layer Betting Logic with Fake Bets
     async processSlLayerBetting(userId, slPatternData) {
         const userSession = userSessions[userId];
-        if (!userSession) return { betType: null, betTypeStr: null, isRealBet: false };
+        if (!userSession) return { betType: null, betTypeStr: null, isRealBet: false, isFakeBet: false };
 
         const patternArray = slPatternData.pattern.split(',').map(p => parseInt(p.trim()));
         const currentSl = slPatternData.current_sl || 1;
@@ -2417,89 +2417,247 @@ Last Update: ${new Date().toLocaleString()}`;
                 [userId]
             );
 
-            return { betType, betTypeStr, isRealBet: true };
+            return { betType, betTypeStr, isRealBet: true, isFakeBet: false };
 
         } else {
-            // WAIT PHASE - Monitor results without betting
+            // WAIT PHASE - Show fake bets and check real results
             const waitSession = await this.getSlWaitSession(userId);
             
             if (!waitSession.is_wait_mode) {
                 // Start wait mode after 3 consecutive losses in betting phase
                 await this.saveSlWaitSession(userId, true, '', '', 0, 0);
-                this.bot.sendMessage(userId, `🎯 SL Layer Wait Mode Started!\n\nBetting Phase: 3/3 Losses\nWait Phase: Monitoring ${currentSl} loss(es)`).catch(console.error);
+                this.bot.sendMessage(userId, `🎯 SL Layer Wait Mode Started!\n\nBetting Phase: 3/3 Losses\nWait Phase: Monitoring ${currentSl} loss(es)\n\nFake bets will be shown with real results.`).catch(console.error);
             }
 
-            // In wait phase, don't place bets
-            return { betType: null, betTypeStr: null, isRealBet: false };
-        }
-    }
+            // In wait phase, show fake bet based on user's betting mode
+            let fakeBetType, fakeBetTypeStr;
 
-    // NEW: Enhanced SL Layer Loss Handler
-    async handleSlLayerLoss(userId, betTypeStr, issue, amount) {
-        const slPatternData = await this.getSlPattern(userId);
-        const slPattern = slPatternData.pattern || "";
-        
-        if (slPattern && slPattern !== "") {
-            const betCount = slPatternData.bet_count || 0;
-            const waitLossCount = slPatternData.wait_loss_count || 0;
-            const currentSl = slPatternData.current_sl || 1;
-            const patternArray = slPattern.split(',').map(p => parseInt(p.trim()));
-            const currentIndex = slPatternData.current_index || 0;
-
-            if (betCount <= 3) {
-                // Betting Phase Loss
-                // Check if we've reached 3 consecutive losses
-                if (betCount >= 3) {
-                    // Move to Wait Phase
-                    await this.saveSlWaitSession(userId, true, '', '', 0, 0);
-                    this.bot.sendMessage(userId, `🔄 SL Layer Phase Change!\n\nBetting Phase: 3/3 Losses\nEntering Wait Phase: Monitoring ${currentSl} loss(es)`).catch(console.error);
-                }
-            } else {
-                // Wait Phase Loss
-                const newWaitLossCount = waitLossCount + 1;
+            // Determine fake bet type based on user's selected mode
+            if (bsPattern && bsPattern !== "") {
+                // BS Formula Mode - Fake bet
+                const patternArrayBS = bsPattern.split(',').map(p => p.trim());
+                const currentIndexBS = patternsData.bs_current_index || 0;
                 
-                await this.db.run(
-                    'UPDATE sl_patterns SET wait_loss_count = ? WHERE user_id = ?',
-                    [newWaitLossCount, userId]
-                );
-
-                // Check if reached required wait losses for current SL
-                if (newWaitLossCount >= currentSl) {
-                    // Move to next SL level and reset for betting phase
-                    const newIndex = (currentIndex + 1) % patternArray.length;
-                    const newSl = patternArray[newIndex] || 1;
-
-                    await this.db.run(
-                        'UPDATE sl_patterns SET current_sl = ?, current_index = ?, wait_loss_count = 0, bet_count = 0 WHERE user_id = ?',
-                        [newSl, newIndex, userId]
-                    );
-
-                    await this.clearSlWaitSession(userId);
-                    
-                    this.bot.sendMessage(userId, `🔄 SL Level Updated!\n\nWait Phase: ${currentSl}/${currentSl} Losses\nNew SL: ${newSl}\nReturning to Betting Phase`).catch(console.error);
+                if (currentIndexBS < patternArrayBS.length) {
+                    const patternChar = patternArrayBS[currentIndexBS].toUpperCase();
+                    fakeBetType = patternChar === 'B' ? 13 : 14;
+                    fakeBetTypeStr = `${patternChar === 'B' ? 'BIG' : 'SMALL'} (BS Formula - Fake)`;
                 }
+            } else if (colourPattern && colourPattern !== "") {
+                // Colour Formula Mode - Fake bet
+                const patternArrayColour = colourPattern.split(',').map(p => p.trim());
+                const currentIndexColour = patternsData.colour_current_index || 0;
+                
+                if (currentIndexColour < patternArrayColour.length) {
+                    const patternChar = patternArrayColour[currentIndexColour].toUpperCase();
+                    if (patternChar === 'R') {
+                        fakeBetType = 10;
+                        fakeBetTypeStr = "RED (Colour Formula - Fake)";
+                    } else if (patternChar === 'G') {
+                        fakeBetType = 11;
+                        fakeBetTypeStr = "GREEN (Colour Formula - Fake)";
+                    } else if (patternChar === 'V') {
+                        fakeBetType = 12;
+                        fakeBetTypeStr = "VIOLET (Colour Formula - Fake)";
+                    }
+                }
+            } else if (randomMode === 'follow') {
+                // Follow Bot Mode - Fake bet
+                const followResult = await this.getFollowBetType(userSession.apiInstance);
+                fakeBetType = followResult.betType;
+                fakeBetTypeStr = `${followResult.betTypeStr} (Follow - Fake)`;
+            } else if (randomMode === 'big') {
+                // Random BIG Mode - Fake bet
+                fakeBetType = 13;
+                fakeBetTypeStr = "BIG (Fake)";
+            } else if (randomMode === 'small') {
+                // Random SMALL Mode - Fake bet
+                fakeBetType = 14;
+                fakeBetTypeStr = "SMALL (Fake)";
+            } else {
+                // Random Bot Mode - Fake bet
+                fakeBetType = Math.random() < 0.5 ? 13 : 14;
+                fakeBetTypeStr = fakeBetType === 13 ? "BIG (Fake)" : "SMALL (Fake)";
             }
+
+            return { 
+                betType: fakeBetType, 
+                betTypeStr: fakeBetTypeStr, 
+                isRealBet: false, 
+                isFakeBet: true 
+            };
         }
     }
 
-    // NEW: SL Layer Win Handler
-    async handleSlLayerWin(userId, betTypeStr, issue, amount) {
+    // NEW: Enhanced Wait Phase Result Checking
+    async checkWaitPhaseResult(userId, issue, fakeBetTypeStr, amount) {
+        try {
+            const userSession = userSessions[userId];
+            if (!userSession.apiInstance) return;
+
+            const results = await userSession.apiInstance.getRecentResults(5);
+            let betResult = "UNKNOWN";
+            let profitLoss = 0;
+            let number = "";
+            let actualResult = "";
+            const slPatternData = await this.getSlPattern(userId);
+            const currentSl = slPatternData.current_sl || 1;
+
+            for (const result of results) {
+                if (result.issueNumber === issue) {
+                    number = result.number || 'N/A';
+                    const colour = (result.colour || '').toUpperCase();
+
+                    // Check fake bet result based on bet type
+                    if (fakeBetTypeStr.includes("BIG")) {
+                        if (['5','6','7','8','9'].includes(number)) {
+                            actualResult = "BIG";
+                            betResult = "WIN";
+                        } else {
+                            actualResult = "SMALL";
+                            betResult = "LOSE";
+                        }
+                    } else if (fakeBetTypeStr.includes("SMALL")) {
+                        if (['0','1','2','3','4'].includes(number)) {
+                            actualResult = "SMALL";
+                            betResult = "WIN";
+                        } else {
+                            actualResult = "BIG";
+                            betResult = "LOSE";
+                        }
+                    } else if (fakeBetTypeStr.includes("RED")) {
+                        if (['2','4','6','8'].includes(number)) {
+                            actualResult = "RED";
+                            betResult = "WIN";
+                        } else {
+                            actualResult = "OTHER";
+                            betResult = "LOSE";
+                        }
+                    } else if (fakeBetTypeStr.includes("GREEN")) {
+                        if (['1','3','7','9'].includes(number)) {
+                            actualResult = "GREEN";
+                            betResult = "WIN";
+                        } else {
+                            actualResult = "OTHER";
+                            betResult = "LOSE";
+                        }
+                    } else if (fakeBetTypeStr.includes("VIOLET")) {
+                        if (['0','5'].includes(number)) {
+                            actualResult = "VIOLET";
+                            betResult = "WIN";
+                        } else {
+                            actualResult = "OTHER";
+                            betResult = "LOSE";
+                        }
+                    }
+
+                    // Calculate potential profit/loss for display
+                    if (betResult === "WIN") {
+                        if (fakeBetTypeStr.includes("RED") || fakeBetTypeStr.includes("GREEN")) {
+                            profitLoss = Math.floor(amount * 0.96);
+                        } else if (fakeBetTypeStr.includes("VIOLET")) {
+                            profitLoss = Math.floor(amount * 0.44);
+                        } else {
+                            profitLoss = Math.floor(amount * 0.96);
+                        }
+                    } else {
+                        profitLoss = -amount;
+                    }
+                    break;
+                }
+            }
+
+            if (betResult !== "UNKNOWN") {
+                let resultMessage;
+                if (betResult === "WIN") {
+                    let payoutRate = "1.96x";
+                    if (fakeBetTypeStr.includes("VIOLET")) {
+                        payoutRate = "1.44x";
+                    }
+                    
+                    resultMessage = `🎯 FAKE BET RESULT - WIN!\n\n` +
+                                  `Issue: ${issue}\n` +
+                                  `Fake Bet Type: ${fakeBetTypeStr}\n` +
+                                  `Amount: ${amount.toLocaleString()} K\n` +
+                                  `Payout: ${payoutRate}\n` +
+                                  `Result: ${actualResult} - WIN\n` +
+                                  `Potential Profit: +${profitLoss.toLocaleString()} K\n` +
+                                  `Total Potential: ${(amount + profitLoss).toLocaleString()} K\n\n` +
+                                  `💡 Wait Phase: This was a fake bet for monitoring.\n` +
+                                  `Wait Loss Count: ${slPatternData.wait_loss_count}/${currentSl}`;
+                } else {
+                    resultMessage = `🎯 FAKE BET RESULT - LOSE\n\n` +
+                                  `Issue: ${issue}\n` +
+                                  `Fake Bet Type: ${fakeBetTypeStr}\n` +
+                                  `Amount: ${amount.toLocaleString()} K\n` +
+                                  `Result: ${actualResult} - LOSE\n` +
+                                  `Potential Loss: -${amount.toLocaleString()} K\n\n` +
+                                  `💡 Wait Phase: This was a fake bet for monitoring.\n` +
+                                  `Wait Loss Count: ${slPatternData.wait_loss_count + 1}/${currentSl}`;
+                }
+
+                // Send fake bet result
+                await this.bot.sendMessage(userId, resultMessage).catch(console.error);
+
+                // Handle wait phase loss counting
+                if (betResult === "LOSE") {
+                    await this.handleWaitPhaseLoss(userId);
+                } else {
+                    await this.handleWaitPhaseWin(userId);
+                }
+            }
+
+        } catch (error) {
+            console.error(`Error checking wait phase result:`, error);
+        }
+    }
+
+    // NEW: Handle Wait Phase Loss
+    async handleWaitPhaseLoss(userId) {
         const slPatternData = await this.getSlPattern(userId);
-        const waitSession = await this.getSlWaitSession(userId);
+        const currentSl = slPatternData.current_sl || 1;
+        const waitLossCount = slPatternData.wait_loss_count || 0;
+        const patternArray = slPatternData.pattern.split(',').map(p => parseInt(p.trim()));
+        const currentIndex = slPatternData.current_index || 0;
+
+        const newWaitLossCount = waitLossCount + 1;
+        
+        await this.db.run(
+            'UPDATE sl_patterns SET wait_loss_count = ? WHERE user_id = ?',
+            [newWaitLossCount, userId]
+        );
+
+        // Check if reached required wait losses for current SL
+        if (newWaitLossCount >= currentSl) {
+            // Move to next SL level and reset for betting phase
+            const newIndex = (currentIndex + 1) % patternArray.length;
+            const newSl = patternArray[newIndex] || 1;
+
+            await this.db.run(
+                'UPDATE sl_patterns SET current_sl = ?, current_index = ?, wait_loss_count = 0, bet_count = 0 WHERE user_id = ?',
+                [newSl, newIndex, userId]
+            );
+
+            await this.clearSlWaitSession(userId);
+            
+            this.bot.sendMessage(userId, `🔄 SL Level Updated!\n\nWait Phase: ${currentSl}/${currentSl} Losses Completed\nNew SL: ${newSl}\nReturning to Betting Phase`).catch(console.error);
+        }
+    }
+
+    // NEW: Handle Wait Phase Win
+    async handleWaitPhaseWin(userId) {
+        const slPatternData = await this.getSlPattern(userId);
         const patternArray = slPatternData.pattern.split(',').map(p => parseInt(p.trim()));
 
-        if (waitSession.is_wait_mode) {
-            // Win during Wait Phase - Continue wait phase
-            this.bot.sendMessage(userId, `✅ Wait Phase Win!\n\nContinuing Wait Phase monitoring...`).catch(console.error);
-        } else {
-            // Win during Betting Phase - Reset to first SL
-            await this.db.run(
-                'UPDATE sl_patterns SET current_sl = ?, current_index = 0, wait_loss_count = 0, bet_count = 0 WHERE user_id = ?',
-                [patternArray[0], userId]
-            );
-            
-            this.bot.sendMessage(userId, `🎉 Betting Phase Win!\n\nReset to SL: ${patternArray[0]}`).catch(console.error);
-        }
+        // Win during Wait Phase - Reset to first SL
+        await this.db.run(
+            'UPDATE sl_patterns SET current_sl = ?, current_index = 0, wait_loss_count = 0, bet_count = 0 WHERE user_id = ?',
+            [patternArray[0], userId]
+        );
+
+        await this.clearSlWaitSession(userId);
+        
+        this.bot.sendMessage(userId, `🎉 Wait Phase Win!\n\nReset to SL: ${patternArray[0]}\nReturning to Betting Phase`).catch(console.error);
     }
 
     // Auto betting loop
@@ -2574,6 +2732,7 @@ Last Update: ${new Date().toLocaleString()}`;
         
         let betType, betTypeStr, betModeInfo = "";
         let isRealBet = true;
+        let isFakeBet = false;
 
         // SL Layer Pattern Mode - Priority 1
         if (slPattern && slPattern !== "") {
@@ -2581,10 +2740,25 @@ Last Update: ${new Date().toLocaleString()}`;
             betType = slResult.betType;
             betTypeStr = slResult.betTypeStr;
             isRealBet = slResult.isRealBet;
+            isFakeBet = slResult.isFakeBet;
             betModeInfo = `\nMode: SL Layer (Pattern: ${slPattern})`;
             
-            if (!isRealBet) {
-                // In wait phase, skip betting
+            if (!isRealBet && isFakeBet) {
+                // In wait phase, show fake bet and check result
+                const amount = await this.getCurrentBetAmount(userId);
+                
+                // Send fake bet notification
+                this.bot.sendMessage(userId, `🎯 FAKE BET - Wait Mode\n\nIssue: ${issue}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K\nStatus: MONITORING REAL RESULT`).catch(console.error);
+                
+                // Check fake bet result after a delay
+                setTimeout(async () => {
+                    await this.checkWaitPhaseResult(userId, issue, betTypeStr, amount);
+                }, 8000);
+                
+                waitingForResults[userId] = false;
+                return;
+            } else if (!isRealBet && !isFakeBet) {
+                // In wait phase but no fake bet (monitoring only)
                 this.bot.sendMessage(userId, `👀 SL Layer Wait Mode\n\nMonitoring results without betting...`).catch(console.error);
                 waitingForResults[userId] = false;
                 return;
@@ -2857,34 +3031,22 @@ Last Update: ${new Date().toLocaleString()}`;
                             profitLoss = profitAmount;
                             totalWinAmount = amount + profitAmount;
                             await this.updateBotStats(userId, profitAmount);
-                            
-                            // Handle SL Layer Win
-                            await this.handleSlLayerWin(userId, betTypeStr, issue, amount);
                         } else if (betTypeStr.includes("VIOLET")) {
                             // VIOLET bets pay 1.44x (profit 0.44x)
                             const profitAmount = Math.floor(amount * 0.44);
                             profitLoss = profitAmount;
                             totalWinAmount = amount + profitAmount;
                             await this.updateBotStats(userId, profitAmount);
-                            
-                            // Handle SL Layer Win
-                            await this.handleSlLayerWin(userId, betTypeStr, issue, amount);
                         } else {
                             // BIG/SMALL bets pay 1.96x (profit 0.96x)
                             const profitAmount = Math.floor(amount * 0.96);
                             profitLoss = profitAmount;
                             totalWinAmount = amount + profitAmount;
                             await this.updateBotStats(userId, profitAmount);
-                            
-                            // Handle SL Layer Win
-                            await this.handleSlLayerWin(userId, betTypeStr, issue, amount);
                         }
                     } else {
                         profitLoss = -amount;
                         await this.updateBotStats(userId, -amount);
-                        
-                        // Handle SL Layer Loss
-                        await this.handleSlLayerLoss(userId, betTypeStr, issue, amount);
                     }
                     break;
                 }
