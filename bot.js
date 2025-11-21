@@ -2334,6 +2334,174 @@ Last Update: ${new Date().toLocaleString()}`;
         await this.bot.sendMessage(chatId, statsText);
     }
 
+    // NEW: Enhanced SL Layer Betting Logic
+    async processSlLayerBetting(userId, slPatternData) {
+        const userSession = userSessions[userId];
+        if (!userSession) return { betType: null, betTypeStr: null, isRealBet: false };
+
+        const patternArray = slPatternData.pattern.split(',').map(p => parseInt(p.trim()));
+        const currentSl = slPatternData.current_sl || 1;
+        const waitLossCount = slPatternData.wait_loss_count || 0;
+        const betCount = slPatternData.bet_count || 0;
+
+        // Get user's selected betting mode
+        const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
+        const patternsData = await this.getFormulaPatterns(userId);
+        const bsPattern = patternsData.bs_pattern || "";
+        const colourPattern = patternsData.colour_pattern || "";
+
+        // Check if we're in Betting Phase or Wait Phase
+        const isBettingPhase = (betCount < 3);
+
+        if (isBettingPhase) {
+            // BETTING PHASE - Place real bets
+            let betType, betTypeStr;
+
+            // Determine bet type based on user's selected mode
+            if (bsPattern && bsPattern !== "") {
+                // BS Formula Mode
+                const patternArrayBS = bsPattern.split(',').map(p => p.trim());
+                const currentIndexBS = patternsData.bs_current_index || 0;
+                
+                if (currentIndexBS < patternArrayBS.length) {
+                    const patternChar = patternArrayBS[currentIndexBS].toUpperCase();
+                    betType = patternChar === 'B' ? 13 : 14;
+                    betTypeStr = `${patternChar === 'B' ? 'BIG' : 'SMALL'} (BS Formula)`;
+                    
+                    // Update pattern position
+                    const newIndex = (currentIndexBS + 1) % patternArrayBS.length;
+                    await this.db.run(
+                        'UPDATE formula_patterns SET bs_current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+                        [newIndex, userId]
+                    );
+                }
+            } else if (colourPattern && colourPattern !== "") {
+                // Colour Formula Mode
+                const patternArrayColour = colourPattern.split(',').map(p => p.trim());
+                const currentIndexColour = patternsData.colour_current_index || 0;
+                
+                if (currentIndexColour < patternArrayColour.length) {
+                    const patternChar = patternArrayColour[currentIndexColour].toUpperCase();
+                    if (patternChar === 'R') {
+                        betType = 10; // RED
+                        betTypeStr = "RED (Colour Formula)";
+                    } else if (patternChar === 'G') {
+                        betType = 11; // GREEN
+                        betTypeStr = "GREEN (Colour Formula)";
+                    } else if (patternChar === 'V') {
+                        betType = 12; // VIOLET
+                        betTypeStr = "VIOLET (Colour Formula)";
+                    }
+                    
+                    // Update pattern position
+                    const newIndex = (currentIndexColour + 1) % patternArrayColour.length;
+                    await this.db.run(
+                        'UPDATE formula_patterns SET colour_current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+                        [newIndex, userId]
+                    );
+                }
+            } else if (randomMode === 'follow') {
+                // Follow Bot Mode
+                const followResult = await this.getFollowBetType(userSession.apiInstance);
+                betType = followResult.betType;
+                betTypeStr = followResult.betTypeStr;
+            } else {
+                // Random Bot Mode (default)
+                betType = Math.random() < 0.5 ? 13 : 14;
+                betTypeStr = betType === 13 ? "BIG" : "SMALL";
+            }
+
+            // Update bet count
+            await this.db.run(
+                'UPDATE sl_patterns SET bet_count = bet_count + 1 WHERE user_id = ?',
+                [userId]
+            );
+
+            return { betType, betTypeStr, isRealBet: true };
+
+        } else {
+            // WAIT PHASE - Monitor results without betting
+            const waitSession = await this.getSlWaitSession(userId);
+            
+            if (!waitSession.is_wait_mode) {
+                // Start wait mode after 3 consecutive losses in betting phase
+                await this.saveSlWaitSession(userId, true, '', '', 0, 0);
+                this.bot.sendMessage(userId, `🎯 SL Layer Wait Mode Started!\n\nBetting Phase: 3/3 Losses\nWait Phase: Monitoring ${currentSl} loss(es)`).catch(console.error);
+            }
+
+            // In wait phase, don't place bets
+            return { betType: null, betTypeStr: null, isRealBet: false };
+        }
+    }
+
+    // NEW: Enhanced SL Layer Loss Handler
+    async handleSlLayerLoss(userId, betTypeStr, issue, amount) {
+        const slPatternData = await this.getSlPattern(userId);
+        const slPattern = slPatternData.pattern || "";
+        
+        if (slPattern && slPattern !== "") {
+            const betCount = slPatternData.bet_count || 0;
+            const waitLossCount = slPatternData.wait_loss_count || 0;
+            const currentSl = slPatternData.current_sl || 1;
+            const patternArray = slPattern.split(',').map(p => parseInt(p.trim()));
+            const currentIndex = slPatternData.current_index || 0;
+
+            if (betCount <= 3) {
+                // Betting Phase Loss
+                // Check if we've reached 3 consecutive losses
+                if (betCount >= 3) {
+                    // Move to Wait Phase
+                    await this.saveSlWaitSession(userId, true, '', '', 0, 0);
+                    this.bot.sendMessage(userId, `🔄 SL Layer Phase Change!\n\nBetting Phase: 3/3 Losses\nEntering Wait Phase: Monitoring ${currentSl} loss(es)`).catch(console.error);
+                }
+            } else {
+                // Wait Phase Loss
+                const newWaitLossCount = waitLossCount + 1;
+                
+                await this.db.run(
+                    'UPDATE sl_patterns SET wait_loss_count = ? WHERE user_id = ?',
+                    [newWaitLossCount, userId]
+                );
+
+                // Check if reached required wait losses for current SL
+                if (newWaitLossCount >= currentSl) {
+                    // Move to next SL level and reset for betting phase
+                    const newIndex = (currentIndex + 1) % patternArray.length;
+                    const newSl = patternArray[newIndex] || 1;
+
+                    await this.db.run(
+                        'UPDATE sl_patterns SET current_sl = ?, current_index = ?, wait_loss_count = 0, bet_count = 0 WHERE user_id = ?',
+                        [newSl, newIndex, userId]
+                    );
+
+                    await this.clearSlWaitSession(userId);
+                    
+                    this.bot.sendMessage(userId, `🔄 SL Level Updated!\n\nWait Phase: ${currentSl}/${currentSl} Losses\nNew SL: ${newSl}\nReturning to Betting Phase`).catch(console.error);
+                }
+            }
+        }
+    }
+
+    // NEW: SL Layer Win Handler
+    async handleSlLayerWin(userId, betTypeStr, issue, amount) {
+        const slPatternData = await this.getSlPattern(userId);
+        const waitSession = await this.getSlWaitSession(userId);
+        const patternArray = slPatternData.pattern.split(',').map(p => parseInt(p.trim()));
+
+        if (waitSession.is_wait_mode) {
+            // Win during Wait Phase - Continue wait phase
+            this.bot.sendMessage(userId, `✅ Wait Phase Win!\n\nContinuing Wait Phase monitoring...`).catch(console.error);
+        } else {
+            // Win during Betting Phase - Reset to first SL
+            await this.db.run(
+                'UPDATE sl_patterns SET current_sl = ?, current_index = 0, wait_loss_count = 0, bet_count = 0 WHERE user_id = ?',
+                [patternArray[0], userId]
+            );
+            
+            this.bot.sendMessage(userId, `🎉 Betting Phase Win!\n\nReset to SL: ${patternArray[0]}`).catch(console.error);
+        }
+    }
+
     // Auto betting loop
     startAutoBetting(userId) {
         const userSession = userSessions[userId];
@@ -2405,16 +2573,19 @@ Last Update: ${new Date().toLocaleString()}`;
         const slPattern = slPatternData.pattern || "";
         
         let betType, betTypeStr, betModeInfo = "";
+        let isRealBet = true;
 
         // SL Layer Pattern Mode - Priority 1
         if (slPattern && slPattern !== "") {
             const slResult = await this.processSlLayerBetting(userId, slPatternData);
-            if (slResult.betType) {
-                betType = slResult.betType;
-                betTypeStr = slResult.betTypeStr;
-                betModeInfo = `\nMode: SL Layer (Pattern: ${slPattern})`;
-            } else {
-                // SL Layer is in wait mode, skip this bet
+            betType = slResult.betType;
+            betTypeStr = slResult.betTypeStr;
+            isRealBet = slResult.isRealBet;
+            betModeInfo = `\nMode: SL Layer (Pattern: ${slPattern})`;
+            
+            if (!isRealBet) {
+                // In wait phase, skip betting
+                this.bot.sendMessage(userId, `👀 SL Layer Wait Mode\n\nMonitoring results without betting...`).catch(console.error);
                 waitingForResults[userId] = false;
                 return;
             }
@@ -2539,54 +2710,6 @@ Last Update: ${new Date().toLocaleString()}`;
             console.error(`Auto bet placement error:`, error);
             waitingForResults[userId] = false;
         }
-    }
-
-    // New method for SL Layer betting logic
-    async processSlLayerBetting(userId, slPatternData) {
-        const patternArray = slPatternData.pattern.split(',').map(p => parseInt(p.trim()));
-        const currentIndex = slPatternData.current_index || 0;
-        const currentSl = slPatternData.current_sl || 1;
-        const waitLossCount = slPatternData.wait_loss_count || 0;
-        
-        // Check if we're in wait mode
-        const waitSession = await this.getSlWaitSession(userId);
-        if (waitSession.is_wait_mode) {
-            // In wait mode, check if we should place recovery bet
-            if (waitLossCount >= currentSl) {
-                const betType = waitSession.wait_bet_type === 'BIG' ? 13 : 14;
-                const betTypeStr = `${waitSession.wait_bet_type} (SL Recovery)`;
-                
-                // Update SL pattern data
-                const newIndex = (currentIndex + 1) % patternArray.length;
-                const newSl = patternArray[newIndex] || 1;
-                
-                await this.db.run(
-                    'UPDATE sl_patterns SET current_sl = ?, current_index = ?, wait_loss_count = 0, bet_count = bet_count + 1 WHERE user_id = ?',
-                    [newSl, newIndex, userId]
-                );
-                
-                // Clear wait session
-                await this.clearSlWaitSession(userId);
-                
-                return { betType, betTypeStr };
-            } else {
-                // Still waiting for more losses, skip betting
-                this.bot.sendMessage(userId, `SL Layer Wait Mode\n\nWaiting for ${currentSl - waitLossCount} more loss(es) before recovery bet...`).catch(console.error);
-                return { betType: null, betTypeStr: null };
-            }
-        }
-        
-        // Normal SL Layer betting - random choice between BIG and SMALL
-        const betType = Math.random() < 0.5 ? 13 : 14;
-        const betTypeStr = betType === 13 ? "BIG (SL Layer)" : "SMALL (SL Layer)";
-        
-        // Update bet count
-        await this.db.run(
-            'UPDATE sl_patterns SET bet_count = bet_count + 1 WHERE user_id = ?',
-            [userId]
-        );
-        
-        return { betType, betTypeStr };
     }
 
     async getFollowBetType(apiInstance) {
@@ -2734,22 +2857,34 @@ Last Update: ${new Date().toLocaleString()}`;
                             profitLoss = profitAmount;
                             totalWinAmount = amount + profitAmount;
                             await this.updateBotStats(userId, profitAmount);
+                            
+                            // Handle SL Layer Win
+                            await this.handleSlLayerWin(userId, betTypeStr, issue, amount);
                         } else if (betTypeStr.includes("VIOLET")) {
                             // VIOLET bets pay 1.44x (profit 0.44x)
                             const profitAmount = Math.floor(amount * 0.44);
                             profitLoss = profitAmount;
                             totalWinAmount = amount + profitAmount;
                             await this.updateBotStats(userId, profitAmount);
+                            
+                            // Handle SL Layer Win
+                            await this.handleSlLayerWin(userId, betTypeStr, issue, amount);
                         } else {
                             // BIG/SMALL bets pay 1.96x (profit 0.96x)
                             const profitAmount = Math.floor(amount * 0.96);
                             profitLoss = profitAmount;
                             totalWinAmount = amount + profitAmount;
                             await this.updateBotStats(userId, profitAmount);
+                            
+                            // Handle SL Layer Win
+                            await this.handleSlLayerWin(userId, betTypeStr, issue, amount);
                         }
                     } else {
                         profitLoss = -amount;
                         await this.updateBotStats(userId, -amount);
+                        
+                        // Handle SL Layer Loss
+                        await this.handleSlLayerLoss(userId, betTypeStr, issue, amount);
                     }
                     break;
                 }
@@ -2776,11 +2911,6 @@ Last Update: ${new Date().toLocaleString()}`;
 
             // Update bet sequence
             await this.updateBetSequence(userId, betResult);
-
-            // Handle SL Layer logic for losses
-            if (betResult === "LOSE") {
-                await this.handleSlLayerLoss(userId, betTypeStr, issue, amount);
-            }
 
             const botSession = await this.getBotSession(userId);
 
@@ -2839,31 +2969,6 @@ Last Update: ${new Date().toLocaleString()}`;
             await this.bot.sendMessage(userId, `Error checking bet result for issue ${issue}\n\nPlease try checking manually.`, {
                 reply_markup: this.getMainKeyboard(userSession.language)
             }).catch(console.error);
-        }
-    }
-
-    // Handle SL Layer losses
-    async handleSlLayerLoss(userId, betTypeStr, issue, amount) {
-        const slPatternData = await this.getSlPattern(userId);
-        const slPattern = slPatternData.pattern || "";
-        
-        if (slPattern && slPattern !== "") {
-            // Increment wait loss count
-            const newWaitLossCount = (slPatternData.wait_loss_count || 0) + 1;
-            
-            await this.db.run(
-                'UPDATE sl_patterns SET wait_loss_count = ? WHERE user_id = ?',
-                [newWaitLossCount, userId]
-            );
-            
-            // Set wait session if this is the first loss in sequence
-            if (newWaitLossCount === 1) {
-                const oppositeBetType = betTypeStr.includes("BIG") ? "SMALL" : "BIG";
-                await this.saveSlWaitSession(userId, true, oppositeBetType, issue, amount, 0);
-                
-                // Send wait mode notification
-                this.bot.sendMessage(userId, `SL Layer Wait Mode Activated!\n\nLoss detected. Waiting for ${slPatternData.current_sl} loss(es) before placing recovery bet on ${oppositeBetType}.`).catch(console.error);
-            }
         }
     }
 
