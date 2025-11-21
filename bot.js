@@ -1264,11 +1264,11 @@ Potential Profit: +${potentialProfit.toLocaleString()} K`;
         // Formula တစ်ခုခုသုံးနေရင် mode text ကိုပြောင်းပြပေး
         if (formulaStatus) {
             if (bsPattern && bsPattern !== "Not set") {
-                modeText = "BS Formula Pattern Mode";
+                modeText = "BS Formula ";
             } else if (colourPattern && colourPattern !== "Not set") {
-                modeText = "Colour Formula Pattern Mode";
+                modeText = "Colour Formula ";
             } else if (slPattern && slPattern !== "Not set") {
-                modeText = "SL Layer Pattern Mode";
+                modeText = "SL Layer ";
             }
         }
 
@@ -1380,15 +1380,15 @@ Choose your betting mode:`;
     // Formula patterns တွေရှိရင် status ပြပေး
     if (bsPattern && bsPattern !== "") {
         formulaStatus += `\n- BS Formula Pattern: ${bsPattern}`;
-        modeText = "BS Formula Pattern Mode";
+        modeText = "BS Formula ";
     }
     if (colourPattern && colourPattern !== "") {
         formulaStatus += `\n- Colour Formula Pattern: ${colourPattern}`;
-        modeText = "Colour Formula Pattern Mode";
+        modeText = "Colour Formula ";
     }
     if (slPattern && slPattern !== "") {
         formulaStatus += `\n- SL Layer Pattern: ${slPattern}`;
-        modeText = "SL Layer Pattern Mode";
+        modeText = "SL Layer ";
     }
 
     autoBettingTasks[userId] = true;
@@ -1414,13 +1414,12 @@ Choose your betting mode:`;
 
     const startMessage = `Auto Bot Started!
 
-Mode: ${modeText}${formulaStatus}
+Mode: ${modeText}
 Bet Sequence: ${betSequence}
 Current Bet: ${currentAmount.toLocaleString()} K${targetInfo}
 Status: RUNNING
-Started: ${moment().format('YYYY-MM-DD HH:mm:ss')}
 
-Bot will start placing bets automatically according to your settings.`;
+`;
 
     await this.bot.sendMessage(chatId, startMessage);
 
@@ -2345,63 +2344,147 @@ Last Update: ${new Date().toLocaleString()}`;
     }
 
     async placeAutoBet(userId, issue) {
-        const userSession = userSessions[userId];
-        if (!userSession.loggedIn) return;
+    const userSession = userSessions[userId];
+    if (!userSession.loggedIn) return;
 
-        waitingForResults[userId] = true;
+    waitingForResults[userId] = true;
 
-        const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
-        let betType, betTypeStr;
+    const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
+    
+    // Formula patterns တွေကိုလည်းယူ
+    const patternsData = await this.getFormulaPatterns(userId);
+    const bsPattern = patternsData.bs_pattern || "";
+    const colourPattern = patternsData.colour_pattern || "";
+    
+    let betType, betTypeStr, betModeInfo = "";
 
-        if (randomMode === 'big') {
-            betType = 13;
-            betTypeStr = "BIG";
-        } else if (randomMode === 'small') {
-            betType = 14;
-            betTypeStr = "SMALL";
-        } else if (randomMode === 'follow') {
-            const followResult = await this.getFollowBetType(userSession.apiInstance);
-            betType = followResult.betType;
-            betTypeStr = followResult.betTypeStr;
+    // BS Formula Pattern Mode
+    if (bsPattern && bsPattern !== "") {
+        const patternArray = bsPattern.split(',').map(p => p.trim());
+        const currentIndex = patternsData.bs_current_index || 0;
+        
+        if (currentIndex < patternArray.length) {
+            const patternChar = patternArray[currentIndex].toUpperCase();
+            if (patternChar === 'B') {
+                betType = 13;
+                betTypeStr = "BIG (BS Formula)";
+            } else if (patternChar === 'S') {
+                betType = 14;
+                betTypeStr = "SMALL (BS Formula)";
+            } else {
+                // Invalid pattern character, fallback to random
+                betType = Math.random() < 0.5 ? 13 : 14;
+                betTypeStr = betType === 13 ? "BIG" : "SMALL";
+            }
+            
+            // Update pattern index
+            const newIndex = (currentIndex + 1) % patternArray.length;
+            await this.db.run(
+                'UPDATE formula_patterns SET bs_current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+                [newIndex, userId]
+            );
+            
+            betModeInfo = `\nPattern: ${bsPattern} (Position: ${currentIndex + 1})`;
         } else {
+            // Pattern index out of bounds, fallback to random
             betType = Math.random() < 0.5 ? 13 : 14;
             betTypeStr = betType === 13 ? "BIG" : "SMALL";
         }
-
-        const amount = await this.getCurrentBetAmount(userId);
-        const balance = await userSession.apiInstance.getBalance();
-
-        if (amount > 0 && balance < amount) {
-            this.bot.sendMessage(userId, `Auto Bot Stopped - Insufficient Balance!\n\nNeed: ${amount.toLocaleString()} K\nAvailable: ${balance.toLocaleString()} K`).catch(console.error);
-            delete autoBettingTasks[userId];
-            delete waitingForResults[userId];
-            return;
-        }
-
-        try {
-            const result = await userSession.apiInstance.placeBet(amount, betType);
-            
-            if (result.success) {
-                await this.savePendingBet(userId, userSession.platform, result.issueId, betTypeStr, amount);
-                await this.updateBotStats(userId);
-                
-                if (!issueCheckers[userId]) {
-                    this.startIssueChecker(userId);
-                }
-
-                const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
-                const betText = `Auto Bet Placed!\n\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})`;
-
-                this.bot.sendMessage(userId, betText).catch(console.error);
+    }
+    // Colour Formula Pattern Mode
+    else if (colourPattern && colourPattern !== "") {
+        const patternArray = colourPattern.split(',').map(p => p.trim());
+        const currentIndex = patternsData.colour_current_index || 0;
+        
+        if (currentIndex < patternArray.length) {
+            const patternChar = patternArray[currentIndex].toUpperCase();
+            if (patternChar === 'R') {
+                betType = COLOUR_BET_TYPES["RED"];
+                betTypeStr = "RED (Colour Formula)";
+            } else if (patternChar === 'G') {
+                betType = COLOUR_BET_TYPES["GREEN"];
+                betTypeStr = "GREEN (Colour Formula)";
+            } else if (patternChar === 'V') {
+                betType = COLOUR_BET_TYPES["VIOLET"];
+                betTypeStr = "VIOLET (Colour Formula)";
             } else {
-                this.bot.sendMessage(userId, `Auto Bet Failed\n\nError: ${result.message}`).catch(console.error);
-                waitingForResults[userId] = false;
+                // Invalid pattern character, fallback to random colour
+                const colours = ["RED", "GREEN", "VIOLET"];
+                const randomColour = colours[Math.floor(Math.random() * colours.length)];
+                betType = COLOUR_BET_TYPES[randomColour];
+                betTypeStr = `${randomColour}`;
             }
-        } catch (error) {
-            console.error(`Auto bet placement error:`, error);
-            waitingForResults[userId] = false;
+            
+            // Update pattern index
+            const newIndex = (currentIndex + 1) % patternArray.length;
+            await this.db.run(
+                'UPDATE formula_patterns SET colour_current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+                [newIndex, userId]
+            );
+            
+            betModeInfo = `\nPattern: ${colourPattern} (Position: ${currentIndex + 1})`;
+        } else {
+            // Pattern index out of bounds, fallback to random colour
+            const colours = ["RED", "GREEN", "VIOLET"];
+            const randomColour = colours[Math.floor(Math.random() * colours.length)];
+            betType = COLOUR_BET_TYPES[randomColour];
+            betTypeStr = `${randomColour}`;
         }
     }
+    // SL Layer Pattern Mode
+    else if (randomMode === 'big') {
+        betType = 13;
+        betTypeStr = "BIG";
+        betModeInfo = "\nMode: Random BIG Only";
+    } else if (randomMode === 'small') {
+        betType = 14;
+        betTypeStr = "SMALL";
+        betModeInfo = "\nMode: Random SMALL Only";
+    } else if (randomMode === 'follow') {
+        const followResult = await this.getFollowBetType(userSession.apiInstance);
+        betType = followResult.betType;
+        betTypeStr = followResult.betTypeStr;
+        betModeInfo = "\nMode: Follow Bot";
+    } else {
+        betType = Math.random() < 0.5 ? 13 : 14;
+        betTypeStr = betType === 13 ? "BIG" : "SMALL";
+        betModeInfo = "\nMode: Random Bot";
+    }
+
+    const amount = await this.getCurrentBetAmount(userId);
+    const balance = await userSession.apiInstance.getBalance();
+
+    if (amount > 0 && balance < amount) {
+        this.bot.sendMessage(userId, `❌  Insufficient Balance!\n\nNeed: ${amount.toLocaleString()} K\nAvailable: ${balance.toLocaleString()} K`).catch(console.error);
+        delete autoBettingTasks[userId];
+        delete waitingForResults[userId];
+        return;
+    }
+
+    try {
+        const result = await userSession.apiInstance.placeBet(amount, betType);
+        
+        if (result.success) {
+            await this.savePendingBet(userId, userSession.platform, result.issueId, betTypeStr, amount);
+            await this.updateBotStats(userId);
+            
+            if (!issueCheckers[userId]) {
+                this.startIssueChecker(userId);
+            }
+
+            const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
+            const betText = `Auto Bet Placed!${betModeInfo}\n\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})\n`;
+
+            this.bot.sendMessage(userId, betText).catch(console.error);
+        } else {
+            this.bot.sendMessage(userId, `❌ Auto Bet Failed\n\nError: ${result.message}`).catch(console.error);
+            waitingForResults[userId] = false;
+        }
+    } catch (error) {
+        console.error(`Auto bet placement error:`, error);
+        waitingForResults[userId] = false;
+    }
+}
 
     async getFollowBetType(apiInstance) {
         try {
