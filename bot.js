@@ -2335,7 +2335,8 @@ Last Update: ${new Date().toLocaleString()}`;
     }
 
     // NEW: Enhanced SL Layer Betting Logic with Fake Bets
-   async processSlLayerBetting(userId, slPatternData) {
+   // NEW: Enhanced SL Layer Betting Logic with Fake Bets
+async processSlLayerBetting(userId, slPatternData) {
     const userSession = userSessions[userId];
     if (!userSession) return { betType: null, betTypeStr: null, isRealBet: false, isFakeBet: false };
 
@@ -2537,15 +2538,14 @@ Last Update: ${new Date().toLocaleString()}`;
 
         console.log(`🔍 SL Debug - Real Bet for user ${userId}: ${betTypeStr}, BetCount: ${betCount + 1}`);
         return { betType, betTypeStr, isRealBet: true, isFakeBet: false };
-
-    } else {
+        
+          } else {
         // Should not reach here, but as fallback
         console.log(`🔍 SL Debug - Fallback to WAIT PHASE for user ${userId}`);
         return { betType: null, betTypeStr: null, isRealBet: false, isFakeBet: false };
     }
 }
-
-    } else {
+  } else {
         // WAIT PHASE - Show fake bets and check real results
         const waitSession = await this.getSlWaitSession(userId);
         
