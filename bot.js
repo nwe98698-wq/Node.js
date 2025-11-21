@@ -361,7 +361,17 @@ class LotteryAPI {
             if (response.status === 200) {
                 const result = response.data;
                 if (result.code === 0 || result.msgCode === 0) {
-                    const potentialProfit = isColourBet ? Math.floor(amount * 2.5) : Math.floor(amount * 0.96);
+                    let potentialProfit;
+                    if (betType === 10) { // RED
+                        potentialProfit = Math.floor(amount * 0.96);
+                    } else if (betType === 11) { // GREEN
+                        potentialProfit = Math.floor(amount * 0.96);
+                    } else if (betType === 12) { // VIOLET
+                        potentialProfit = Math.floor(amount * 0.44);
+                    } else {
+                        potentialProfit = Math.floor(amount * 0.96);
+                    }
+                    
                     return { success: true, message: "Bet placed successfully", issueId, potentialProfit };
                 } else {
                     const errorMsg = result.msg || 'Bet failed';
@@ -941,7 +951,7 @@ Your credentials will be saved for future use!`;
                 
                 // Check if game ID is allowed
                 if (!await this.isGameIdAllowed(gameId)) {
-                    await this.bot.editMessageText(`❌ Login Failed!\n\nGame ID: ${gameId}\nStatus: NOT ALLOWED\n\nPlease contact admin: @Smile_p2`, {
+                    await this.bot.editMessageText(`Login Failed!\n\nGame ID: ${gameId}\nStatus: NOT ALLOWED\n\nPlease contact admin: @Smile_p2`, {
                         chat_id: chatId,
                         message_id: loadingMsg.message_id
                     });
@@ -956,32 +966,31 @@ Your credentials will be saved for future use!`;
                 await this.saveUserCredentials(userId, userSession.phone, userSession.password, userSession.platform);
                 await this.saveUserSetting(userId, 'auto_login', 1);
 
-                const successText = `✅ Login Successful!
+                const successText = `Login Successful!
 
 Platform: 777 Big Win
 Game ID: ${gameId}
 Account: ${userSession.phone}
 Balance: ${balance.toLocaleString()} K
 
-Status: ✅ VERIFIED`;
+Status: VERIFIED`;
 
                 await this.bot.editMessageText(successText, {
                     chat_id: chatId,
-                    message_id: loadingMsg.message_id,
-                    parse_mode: 'Markdown'
+                    message_id: loadingMsg.message_id
                 });
 
                 await this.bot.sendMessage(chatId, "Choose an option:", {
                     reply_markup: this.getMainKeyboard()
                 });
             } else {
-                await this.bot.editMessageText(`❌ Login failed: ${result.message}`, {
+                await this.bot.editMessageText(`Login failed: ${result.message}`, {
                     chat_id: chatId,
                     message_id: loadingMsg.message_id
                 });
             }
         } catch (error) {
-            await this.bot.editMessageText(`❌ Login error: ${error.message}`, {
+            await this.bot.editMessageText(`Login error: ${error.message}`, {
                 chat_id: chatId,
                 message_id: loadingMsg.message_id
             });
@@ -1014,7 +1023,7 @@ Status: LOGGED IN
 
 Last update: ${moment().format('HH:mm:ss')}`;
 
-            await this.bot.sendMessage(chatId, balanceText, { parse_mode: 'Markdown' });
+            await this.bot.sendMessage(chatId, balanceText);
         } catch (error) {
             await this.bot.sendMessage(chatId, `Error getting balance: ${error.message}`);
         }
@@ -1050,7 +1059,7 @@ Last update: ${moment().format('HH:mm:ss')}`;
 
             resultsText += `\nLast updated: ${moment().format('YYYY-MM-DD HH:mm:ss')}`;
 
-            await this.bot.sendMessage(chatId, resultsText, { parse_mode: 'Markdown' });
+            await this.bot.sendMessage(chatId, resultsText);
         } catch (error) {
             await this.bot.sendMessage(chatId, `Error getting results: ${error.message}`);
         }
@@ -1072,9 +1081,7 @@ Last update: ${moment().format('HH:mm:ss')}`;
             }
 
             if (await this.hasUserBetOnIssue(userId, userSession.platform, currentIssue)) {
-                await this.bot.sendMessage(chatId, `Wait for next period\n\nYou have already placed a bet on issue ${currentIssue}.\nPlease wait for the next game period to place another bet.`, {
-                    parse_mode: 'Markdown'
-                });
+                await this.bot.sendMessage(chatId, `Wait for next period\n\nYou have already placed a bet on issue ${currentIssue}.\nPlease wait for the next game period to place another bet.`);
                 return;
             }
 
@@ -1109,8 +1116,7 @@ Amount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})`;
 
                 await this.bot.editMessageText(betText, {
                     chat_id: chatId,
-                    message_id: loadingMsg.message_id,
-                    parse_mode: 'Markdown'
+                    message_id: loadingMsg.message_id
                 });
             } else {
                 await this.bot.editMessageText(`Bet failed: ${result.message}`, {
@@ -1139,9 +1145,7 @@ Amount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})`;
             }
 
             if (await this.hasUserBetOnIssue(userId, userSession.platform, currentIssue)) {
-                await this.bot.sendMessage(chatId, `Wait for next period\n\nYou have already placed a bet on issue ${currentIssue}.\nPlease wait for the next game period to place another bet.`, {
-                    parse_mode: 'Markdown'
-                });
+                await this.bot.sendMessage(chatId, `Wait for next period\n\nYou have already placed a bet on issue ${currentIssue}.\nPlease wait for the next game period to place another bet.`);
                 return;
             }
 
@@ -1156,7 +1160,18 @@ Amount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})`;
                 return;
             }
 
-            const loadingMsg = await this.bot.sendMessage(chatId, `Placing ${colour} bet...\nPlatform: 777 Big Win\nIssue: ${currentIssue}\nAmount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})`);
+            // Calculate potential profit based on colour
+            let potentialProfit;
+            let payoutRate;
+            if (colour === "RED" || colour === "GREEN") {
+                potentialProfit = Math.floor(amount * 0.96);
+                payoutRate = "1.96x";
+            } else if (colour === "VIOLET") {
+                potentialProfit = Math.floor(amount * 0.44);
+                payoutRate = "1.44x";
+            }
+
+            const loadingMsg = await this.bot.sendMessage(chatId, `Placing ${colour} bet...\nPlatform: 777 Big Win\nIssue: ${currentIssue}\nAmount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})\nPayout: ${payoutRate}\nPotential Profit: +${potentialProfit.toLocaleString()} K`);
 
             const result = await userSession.apiInstance.placeBet(amount, betType);
             
@@ -1173,12 +1188,13 @@ Amount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})`;
 Platform: 777 Big Win
 Issue: ${result.issueId}
 Type: ${colour}
-Amount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})`;
+Amount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})
+Payout: ${payoutRate}
+Potential Profit: +${potentialProfit.toLocaleString()} K`;
 
                 await this.bot.editMessageText(betText, {
                     chat_id: chatId,
-                    message_id: loadingMsg.message_id,
-                    parse_mode: 'Markdown'
+                    message_id: loadingMsg.message_id
                 });
             } else {
                 await this.bot.editMessageText(`${colour} bet failed: ${result.message}`, {
@@ -1197,6 +1213,10 @@ Amount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})`;
             const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
             const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
             const currentAmount = await this.getCurrentBetAmount(userId);
+            
+            // Profit/Loss Target တွေကိုလည်းယူ
+            const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
+            const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
 
             const botSession = await this.getBotSession(userId);
 
@@ -1212,19 +1232,24 @@ Amount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})`;
 Current Settings:
 - Betting Mode: ${modeText}
 - Bet Sequence: ${betSequence}
-- Current Bet: ${currentAmount} K (Step ${currentIndex + 1})
+- Current Bet: ${currentAmount.toLocaleString()} K (Step ${currentIndex + 1})
 - Bot Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}
+
+Profit/Loss Targets:
+- Profit Target: ${profitTarget > 0 ? profitTarget.toLocaleString() + ' K' : 'Disabled'}
+- Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
 
 Bot Statistics:
 - Session Profit: ${botSession.session_profit.toLocaleString()} K
 - Session Loss: ${botSession.session_loss.toLocaleString()} K
 - Net Profit: ${(botSession.session_profit - botSession.session_loss).toLocaleString()} K
 
+Targets will auto-stop bot when reached
+
 Choose your betting mode:`;
 
             await this.bot.sendMessage(chatId, settingsText, {
-                reply_markup: this.getBotSettingsKeyboard(),
-                parse_mode: 'Markdown'
+                reply_markup: this.getBotSettingsKeyboard()
             });
         } catch (error) {
             await this.bot.sendMessage(chatId, "Error loading bot settings. Please try again.");
@@ -1258,7 +1283,7 @@ Choose your betting mode:`;
                 betsText += `${i+1}. ${bet.issue} - ${bet.bet_type} - ${bet.amount.toLocaleString()}K - ${resultText}\n`;
             });
 
-            await this.bot.sendMessage(chatId, betsText, { parse_mode: 'Markdown' });
+            await this.bot.sendMessage(chatId, betsText);
         } catch (error) {
             await this.bot.sendMessage(chatId, "Error getting bet history. Please try again.");
         }
@@ -1291,9 +1316,7 @@ Choose your betting mode:`;
             'follow': "Follow Bot"
         }[randomMode] || "Random Bot";
 
-        await this.bot.sendMessage(chatId, `Auto Bot Started!\n\nMode: ${modeText}\nStatus: RUNNING\n\nBot will start placing bets automatically.`, {
-            parse_mode: 'Markdown'
-        });
+        await this.bot.sendMessage(chatId, `Auto Bot Started!\n\nMode: ${modeText}\nStatus: RUNNING\n\nBot will start placing bets automatically.`);
 
         this.startAutoBetting(userId);
     }
@@ -1312,9 +1335,7 @@ Choose your betting mode:`;
         await this.db.run('DELETE FROM pending_bets WHERE user_id = ?', [userId]);
         await this.saveBotSession(userId, false);
 
-        await this.bot.sendMessage(chatId, `Auto Bot Stopped!\n\nStatus: STOPPED\n\nAll betting activities have been stopped immediately.\nPending bets have been cleared.`, {
-            parse_mode: 'Markdown'
-        });
+        await this.bot.sendMessage(chatId, `Auto Bot Stopped!\n\nStatus: STOPPED\n\nAll betting activities have been stopped immediately.\nPending bets have been cleared.`);
     }
 
     async setRandomBig(chatId, userId) {
@@ -1382,12 +1403,16 @@ Choose your betting mode:`;
             await this.saveUserSetting(userId, 'profit_target', targetAmount);
             userSessions[userId].step = 'main';
             
+            const botSession = await this.getBotSession(userId);
+            const netProfit = botSession.session_profit - botSession.session_loss;
+            
             if (targetAmount === 0) {
-                await this.bot.sendMessage(chatId, "Profit target disabled!\n\nBot will run continuously until manually stopped.", {
+                await this.bot.sendMessage(chatId, "Profit Target Disabled!\n\nBot will run continuously until manually stopped.", {
                     reply_markup: this.getBotSettingsKeyboard()
                 });
             } else {
-                await this.bot.sendMessage(chatId, `Profit target set to: ${targetAmount.toLocaleString()} K\n\nBot will automatically stop when profit reaches ${targetAmount.toLocaleString()} K`, {
+                const progress = Math.min(100, Math.round((netProfit / targetAmount) * 100));
+                await this.bot.sendMessage(chatId, `Profit Target Set!\n\nTarget: ${targetAmount.toLocaleString()} K\nCurrent Progress: ${progress}% (${netProfit.toLocaleString()}/${targetAmount.toLocaleString()} K)\n\nBot will automatically stop when profit reaches ${targetAmount.toLocaleString()} K`, {
                     reply_markup: this.getBotSettingsKeyboard()
                 });
             }
@@ -1407,12 +1432,15 @@ Choose your betting mode:`;
             await this.saveUserSetting(userId, 'loss_target', targetAmount);
             userSessions[userId].step = 'main';
             
+            const botSession = await this.getBotSession(userId);
+            const progress = Math.min(100, Math.round((botSession.session_loss / targetAmount) * 100));
+            
             if (targetAmount === 0) {
-                await this.bot.sendMessage(chatId, "Loss target disabled!\n\nBot will run continuously until manually stopped.", {
+                await this.bot.sendMessage(chatId, "Loss Target Disabled!\n\nBot will run continuously until manually stopped.", {
                     reply_markup: this.getBotSettingsKeyboard()
                 });
             } else {
-                await this.bot.sendMessage(chatId, `Loss target set to: ${targetAmount.toLocaleString()} K\n\nBot will automatically stop when loss reaches ${targetAmount.toLocaleString()} K`, {
+                await this.bot.sendMessage(chatId, `Loss Target Set!\n\nTarget: ${targetAmount.toLocaleString()} K\nCurrent Progress: ${progress}% (${botSession.session_loss.toLocaleString()}/${targetAmount.toLocaleString()} K)\n\nBot will automatically stop when loss reaches ${targetAmount.toLocaleString()} K`, {
                     reply_markup: this.getBotSettingsKeyboard()
                 });
             }
@@ -1576,17 +1604,47 @@ Choose an option to manage your Colour pattern:`;
     async showBotStats(chatId, userId) {
         const botSession = await this.getBotSession(userId);
         
+        // Profit/Loss Target တွေကိုလည်းယူ
+        const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
+        const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
+        
+        const netProfit = botSession.session_profit - botSession.session_loss;
+        
+        // Target progress calculation
+        let profitProgress = "N/A";
+        let lossProgress = "N/A";
+        
+        if (profitTarget > 0) {
+            const progress = Math.min(100, Math.round((netProfit / profitTarget) * 100));
+            profitProgress = `${progress}% (${netProfit.toLocaleString()}/${profitTarget.toLocaleString()} K)`;
+        }
+        
+        if (lossTarget > 0) {
+            const progress = Math.min(100, Math.round((botSession.session_loss / lossTarget) * 100));
+            lossProgress = `${progress}% (${botSession.session_loss.toLocaleString()}/${lossTarget.toLocaleString()} K)`;
+        }
+        
         const statsText = `Bot Statistics
 
 Session Data:
 - Session Profit: ${botSession.session_profit.toLocaleString()} K
 - Session Loss: ${botSession.session_loss.toLocaleString()} K
-- Net Profit: ${(botSession.session_profit - botSession.session_loss).toLocaleString()} K
+- Net Profit: ${netProfit.toLocaleString()} K
 - Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}
 
-*Session statistics reset when bot starts*`;
+Profit/Loss Targets:
+- Profit Target: ${profitTarget > 0 ? profitTarget.toLocaleString() + ' K' : 'Disabled'}
+- Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
 
-        await this.bot.sendMessage(chatId, statsText, { parse_mode: 'Markdown' });
+Target Progress:
+- Profit Progress: ${profitProgress}
+- Loss Progress: ${lossProgress}
+
+Session statistics reset when bot starts`;
+
+        await this.bot.sendMessage(chatId, statsText, {
+            reply_markup: this.getBotSettingsKeyboard()
+        });
     }
 
     async resetBotStats(chatId, userId) {
@@ -1655,10 +1713,10 @@ Manage your SL Pattern:`;
 Please select your preferred language:
 
 - English - English language
-- Burmese - မြန်မာစာ  
-- Chinese - 中文
-- Thailand - ภาษาไทย
-- Pakistan - اردو
+- Burmese - Burmese language  
+- Chinese - Chinese language
+- Thailand - Thai language
+- Pakistan - Urdu language
 
 Select your language below:`;
 
@@ -1676,28 +1734,28 @@ Select your language below:`;
 
     async setBurmeseLanguage(chatId, userId) {
         await this.saveUserSetting(userId, 'language', 'burmese');
-        await this.bot.sendMessage(chatId, "ဘာသာစကား ပြောင်းလဲပြီးပါပြီ\n\nဘော့သတင်းစကားအားလုံးကို မြန်မာဘာသာဖြင့် ပြသပေးပါမည်။", {
+        await this.bot.sendMessage(chatId, "Language changed to Burmese\n\nAll bot messages will now be displayed in Burmese.", {
             reply_markup: this.getMainKeyboard()
         });
     }
 
     async setChineseLanguage(chatId, userId) {
         await this.saveUserSetting(userId, 'language', 'chinese');
-        await this.bot.sendMessage(chatId, "语言已设置为中文\n\n所有机器人消息现在将以中文显示。", {
+        await this.bot.sendMessage(chatId, "Language set to Chinese\n\nAll bot messages will now be displayed in Chinese.", {
             reply_markup: this.getMainKeyboard()
         });
     }
 
     async setThaiLanguage(chatId, userId) {
         await this.saveUserSetting(userId, 'language', 'thai');
-        await this.bot.sendMessage(chatId, "ตั้งค่าภาษาเป็นไทยแล้ว\n\nข้อความบอททั้งหมดจะแสดงเป็นภาษาไทย", {
+        await this.bot.sendMessage(chatId, "Language set to Thai\n\nAll bot messages will now be displayed in Thai.", {
             reply_markup: this.getMainKeyboard()
         });
     }
 
     async setPakistanLanguage(chatId, userId) {
         await this.saveUserSetting(userId, 'language', 'urdu');
-        await this.bot.sendMessage(chatId, "زبان اردو میں تبدیل کر دی گئی\n\nتمام بوٹ کے پیغامات اب اردو میں دکھائے جائیں گے۔", {
+        await this.bot.sendMessage(chatId, "Language changed to Urdu\n\nAll bot messages will now be displayed in Urdu.", {
             reply_markup: this.getMainKeyboard()
         });
     }
@@ -1721,6 +1779,10 @@ Select your language below:`;
             const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
             const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
             const currentAmount = await this.getCurrentBetAmount(userId);
+            
+            // Profit/Loss Target တွေကိုလည်းယူ
+            const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
+            const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
 
             const modeText = {
                 'big': "Random BIG Only",
@@ -1728,6 +1790,22 @@ Select your language below:`;
                 'bot': "Random Bot",
                 'follow': "Follow Bot"
             }[randomMode] || "Random Bot";
+
+            const netProfit = botSession.session_profit - botSession.session_loss;
+            
+            // Target progress calculation
+            let profitProgress = "N/A";
+            let lossProgress = "N/A";
+            
+            if (profitTarget > 0) {
+                const progress = Math.min(100, Math.round((netProfit / profitTarget) * 100));
+                profitProgress = `${progress}% (${netProfit.toLocaleString()}/${profitTarget.toLocaleString()} K)`;
+            }
+            
+            if (lossTarget > 0) {
+                const progress = Math.min(100, Math.round((botSession.session_loss / lossTarget) * 100));
+                lossProgress = `${progress}% (${botSession.session_loss.toLocaleString()}/${lossTarget.toLocaleString()} K)`;
+            }
 
             const botInfoText = `BOT INFORMATION
 
@@ -1741,17 +1819,30 @@ Bot Settings:
 - Mode: ${modeText}
 - Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}
 - Bet Sequence: ${betSequence}
-- Current Bet: ${currentAmount} K (Step ${currentIndex + 1})
+- Current Bet: ${currentAmount.toLocaleString()} K (Step ${currentIndex + 1})
+
+Profit/Loss Targets:
+- Profit Target: ${profitTarget > 0 ? profitTarget.toLocaleString() + ' K' : 'Disabled'}
+- Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
+
+Target Progress:
+- Profit Progress: ${profitProgress}
+- Loss Progress: ${lossProgress}
+
+Payout Rates:
+- RED/GREEN: 1.96x (Profit: 0.96x)
+- VIOLET: 1.44x (Profit: 0.44x)
+- BIG/SMALL: 1.96x (Profit: 0.96x)
 
 Bot Statistics:
 - Session Profit: ${botSession.session_profit.toLocaleString()} K
 - Session Loss: ${botSession.session_loss.toLocaleString()} K
-- Net Profit: ${(botSession.session_profit - botSession.session_loss).toLocaleString()} K
+- Net Profit: ${netProfit.toLocaleString()} K
 - Total Bets: ${botSession.total_bets}
 
 Last Update: ${new Date().toLocaleString()}`;
 
-            await this.bot.sendMessage(chatId, botInfoText, { parse_mode: 'Markdown' });
+            await this.bot.sendMessage(chatId, botInfoText);
             
         } catch (error) {
             await this.bot.sendMessage(chatId, "Error loading bot information. Please try again.");
@@ -2018,13 +2109,13 @@ Last Update: ${new Date().toLocaleString()}`;
         const userId = String(chatId);
 
         if (userId !== ADMIN_USER_ID) {
-            await this.bot.sendMessage(chatId, "❌ You are not authorized to use this command.");
+            await this.bot.sendMessage(chatId, "You are not authorized to use this command.");
             return;
         }
 
         const gameId = match[1];
         if (!gameId || !/^\d+$/.test(gameId)) {
-            await this.bot.sendMessage(chatId, "❌ Game ID must contain only numbers.");
+            await this.bot.sendMessage(chatId, "Game ID must contain only numbers.");
             return;
         }
 
@@ -2033,9 +2124,9 @@ Last Update: ${new Date().toLocaleString()}`;
                 'INSERT OR REPLACE INTO allowed_game_ids (game_id, added_by) VALUES (?, ?)',
                 [gameId, userId]
             );
-            await this.bot.sendMessage(chatId, `✅ Game ID '${gameId}' added successfully!`);
+            await this.bot.sendMessage(chatId, `Game ID '${gameId}' added successfully!`);
         } catch (error) {
-            await this.bot.sendMessage(chatId, "❌ Failed to add game ID.");
+            await this.bot.sendMessage(chatId, "Failed to add game ID.");
         }
     }
 
@@ -2044,16 +2135,16 @@ Last Update: ${new Date().toLocaleString()}`;
         const userId = String(chatId);
 
         if (userId !== ADMIN_USER_ID) {
-            await this.bot.sendMessage(chatId, "❌ You are not authorized to use this command.");
+            await this.bot.sendMessage(chatId, "You are not authorized to use this command.");
             return;
         }
 
         const gameId = match[1];
         try {
             await this.db.run('DELETE FROM allowed_game_ids WHERE game_id = ?', [gameId]);
-            await this.bot.sendMessage(chatId, `✅ Game ID '${gameId}' removed successfully!`);
+            await this.bot.sendMessage(chatId, `Game ID '${gameId}' removed successfully!`);
         } catch (error) {
-            await this.bot.sendMessage(chatId, "❌ Failed to remove game ID.");
+            await this.bot.sendMessage(chatId, "Failed to remove game ID.");
         }
     }
 
@@ -2062,23 +2153,23 @@ Last Update: ${new Date().toLocaleString()}`;
         const userId = String(chatId);
 
         if (userId !== ADMIN_USER_ID) {
-            await this.bot.sendMessage(chatId, "❌ You are not authorized to use this command.");
+            await this.bot.sendMessage(chatId, "You are not authorized to use this command.");
             return;
         }
 
         const gameIds = await this.getAllowedGameIds();
         if (gameIds.length === 0) {
-            await this.bot.sendMessage(chatId, "📝 No game IDs found.");
+            await this.bot.sendMessage(chatId, "No game IDs found.");
             return;
         }
 
-        let gameIdsText = "📋 Allowed Game IDs:\n\n";
+        let gameIdsText = "Allowed Game IDs:\n\n";
         gameIds.forEach((gameId, i) => {
-            gameIdsText += `${i+1}. \`${gameId}\`\n`;
+            gameIdsText += `${i+1}. ${gameId}\n`;
         });
 
         gameIdsText += `\nTotal: ${gameIds.length} game IDs`;
-        await this.bot.sendMessage(chatId, gameIdsText, { parse_mode: 'Markdown' });
+        await this.bot.sendMessage(chatId, gameIdsText);
     }
 
     async handleGameIdStats(msg) {
@@ -2086,25 +2177,25 @@ Last Update: ${new Date().toLocaleString()}`;
         const userId = String(chatId);
 
         if (userId !== ADMIN_USER_ID) {
-            await this.bot.sendMessage(chatId, "❌ You are not authorized to use this command.");
+            await this.bot.sendMessage(chatId, "You are not authorized to use this command.");
             return;
         }
 
         const gameIds = await this.getAllowedGameIds();
         const totalIds = gameIds.length;
 
-        let statsText = `📊 Game ID Statistics\n\nTotal Allowed Game IDs: ${totalIds}\n\nRecent Game IDs:\n`;
+        let statsText = `Game ID Statistics\n\nTotal Allowed Game IDs: ${totalIds}\n\nRecent Game IDs:\n`;
 
         const recentIds = gameIds.slice(0, 10);
         recentIds.forEach((gameId, i) => {
-            statsText += `${i+1}. \`${gameId}\`\n`;
+            statsText += `${i+1}. ${gameId}\n`;
         });
 
         if (totalIds > 10) {
             statsText += `\n... and ${totalIds - 10} more`;
         }
 
-        await this.bot.sendMessage(chatId, statsText, { parse_mode: 'Markdown' });
+        await this.bot.sendMessage(chatId, statsText);
     }
 
     // Auto betting loop
@@ -2188,9 +2279,7 @@ Last Update: ${new Date().toLocaleString()}`;
         const balance = await userSession.apiInstance.getBalance();
 
         if (amount > 0 && balance < amount) {
-            this.bot.sendMessage(userId, `Auto Bot Stopped - Insufficient Balance!\n\nNeed: ${amount.toLocaleString()} K\nAvailable: ${balance.toLocaleString()} K`, {
-                parse_mode: 'Markdown'
-            }).catch(console.error);
+            this.bot.sendMessage(userId, `Auto Bot Stopped - Insufficient Balance!\n\nNeed: ${amount.toLocaleString()} K\nAvailable: ${balance.toLocaleString()} K`).catch(console.error);
             delete autoBettingTasks[userId];
             delete waitingForResults[userId];
             return;
@@ -2210,11 +2299,9 @@ Last Update: ${new Date().toLocaleString()}`;
                 const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
                 const betText = `Auto Bet Placed!\n\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})`;
 
-                this.bot.sendMessage(userId, betText, { parse_mode: 'Markdown' }).catch(console.error);
+                this.bot.sendMessage(userId, betText).catch(console.error);
             } else {
-                this.bot.sendMessage(userId, `Auto Bet Failed\n\nError: ${result.message}`, {
-                    parse_mode: 'Markdown'
-                }).catch(console.error);
+                this.bot.sendMessage(userId, `Auto Bet Failed\n\nError: ${result.message}`).catch(console.error);
                 waitingForResults[userId] = false;
             }
         } catch (error) {
@@ -2336,7 +2423,7 @@ Last Update: ${new Date().toLocaleString()}`;
                             betResult = "LOSE";
                         }
                     } else if (betTypeStr.includes("RED")) {
-                        if (['0','2','4','6','8'].includes(number)) {
+                        if (['2','4','6','8'].includes(number)) {
                             actualResult = "RED";
                             betResult = "WIN";
                         } else {
@@ -2362,16 +2449,25 @@ Last Update: ${new Date().toLocaleString()}`;
                     }
 
                     if (betResult === "WIN") {
-                        if (betTypeStr.includes("RED") || betTypeStr.includes("GREEN") || betTypeStr.includes("VIOLET")) {
-                            const profitAmount = Math.floor(amount * 1.5);
-                            profitLoss = profitAmount;
-                            totalWinAmount = amount + profitAmount;
-                        } else {
+                        if (betTypeStr.includes("RED") || betTypeStr.includes("GREEN")) {
+                            // RED/GREEN bets pay 1.96x (profit 0.96x)
                             const profitAmount = Math.floor(amount * 0.96);
                             profitLoss = profitAmount;
                             totalWinAmount = amount + profitAmount;
+                            await this.updateBotStats(userId, profitAmount);
+                        } else if (betTypeStr.includes("VIOLET")) {
+                            // VIOLET bets pay 1.44x (profit 0.44x)
+                            const profitAmount = Math.floor(amount * 0.44);
+                            profitLoss = profitAmount;
+                            totalWinAmount = amount + profitAmount;
+                            await this.updateBotStats(userId, profitAmount);
+                        } else {
+                            // BIG/SMALL bets pay 1.96x (profit 0.96x)
+                            const profitAmount = Math.floor(amount * 0.96);
+                            profitLoss = profitAmount;
+                            totalWinAmount = amount + profitAmount;
+                            await this.updateBotStats(userId, profitAmount);
                         }
-                        await this.updateBotStats(userId, profitAmount);
                     } else {
                         profitLoss = -amount;
                         await this.updateBotStats(userId, -amount);
@@ -2380,7 +2476,13 @@ Last Update: ${new Date().toLocaleString()}`;
                 }
             }
 
-            if (betResult === "UNKNOWN") return;
+            if (betResult === "UNKNOWN") {
+                console.log(`Result not found for issue ${issue}`);
+                if (waitingForResults[userId]) {
+                    waitingForResults[userId] = false;
+                }
+                return;
+            }
 
             // Save bet history and remove pending bet
             await this.db.run(
@@ -2400,28 +2502,117 @@ Last Update: ${new Date().toLocaleString()}`;
 
             let resultMessage;
             if (betResult === "WIN") {
-                resultMessage = `BET RESULT UPDATE\n\nIssue: ${issue}\nBet Type: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K\nResult: WIN\nProfit: +${profitLoss.toLocaleString()} K\nTotal Win: ${totalWinAmount.toLocaleString()} K\n\nTotal Profit: ${botSession.total_profit.toLocaleString()} K`;
+                // Show different payout rates based on bet type
+                let payoutRate = "1.96x";
+                if (betTypeStr.includes("VIOLET")) {
+                    payoutRate = "1.44x";
+                }
+                
+                resultMessage = `BET RESULT - WIN!\n\n` +
+                              `Issue: ${issue}\n` +
+                              `Bet Type: ${betTypeStr}\n` +
+                              `Amount: ${amount.toLocaleString()} K\n` +
+                              `Payout: ${payoutRate}\n` +
+                              `Result: ${actualResult} - WIN\n` +
+                              `Profit: +${profitLoss.toLocaleString()} K\n` +
+                              `Total Win: ${totalWinAmount.toLocaleString()} K\n` +
+                              `Total Profit: ${botSession.total_profit.toLocaleString()} K\n\n` +
+                              `Congratulations!`;
             } else {
-                resultMessage = `BET RESULT UPDATE\n\nIssue: ${issue}\nBet Type: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K\nResult: LOSE\nLoss: -${amount.toLocaleString()} K\n\nTotal Profit: ${botSession.total_profit.toLocaleString()} K`;
+                resultMessage = `BET RESULT - LOSE\n\n` +
+                              `Issue: ${issue}\n` +
+                              `Bet Type: ${betTypeStr}\n` +
+                              `Amount: ${amount.toLocaleString()} K\n` +
+                              `Result: ${actualResult} - LOSE\n` +
+                              `Loss: -${amount.toLocaleString()} K\n` +
+                              `Total Profit: ${botSession.total_profit.toLocaleString()} K\n\n` +
+                              `Don't worry, next time!`;
             }
 
-            this.bot.sendMessage(userId, resultMessage, { parse_mode: 'Markdown' }).catch(console.error);
+            // Send result message
+            await this.bot.sendMessage(userId, resultMessage, {
+                reply_markup: this.getMainKeyboard(userSession.language)
+            }).catch(error => {
+                console.error(`Error sending result message to user ${userId}:`, error);
+            });
+
+            // Check profit/loss targets
+            await this.checkProfitLossTargets(userId, botSession);
 
             if (waitingForResults[userId]) {
                 waitingForResults[userId] = false;
             }
+
+            console.log(`Bet result processed for user ${userId}: ${betResult} on issue ${issue}, Profit: ${profitLoss}`);
+
         } catch (error) {
             console.error(`Error checking single bet result:`, error);
             if (waitingForResults[userId]) {
                 waitingForResults[userId] = false;
             }
+            
+            // Send error message to user
+            await this.bot.sendMessage(userId, `Error checking bet result for issue ${issue}\n\nPlease try checking manually.`, {
+                reply_markup: this.getMainKeyboard(userSession.language)
+            }).catch(console.error);
+        }
+    }
+
+    async checkProfitLossTargets(userId, botSession) {
+        try {
+            const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
+            const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
+            
+            const netProfit = botSession.session_profit - botSession.session_loss;
+            
+            if (profitTarget > 0 && netProfit >= profitTarget) {
+                // Profit target reached
+                await this.bot.sendMessage(userId, `PROFIT TARGET REACHED!\n\n` +
+                    `Target: ${profitTarget.toLocaleString()} K\n` +
+                    `Actual Profit: ${netProfit.toLocaleString()} K\n` +
+                    `Achievement: ${Math.round((netProfit / profitTarget) * 100)}%\n\n` +
+                    `Auto Bot has been stopped automatically.`, {
+                    reply_markup: this.getMainKeyboard(userSessions[userId].language)
+                });
+                
+                // Stop the bot
+                if (autoBettingTasks[userId]) {
+                    delete autoBettingTasks[userId];
+                }
+                if (waitingForResults[userId]) {
+                    delete waitingForResults[userId];
+                }
+                await this.saveBotSession(userId, false);
+            }
+            
+            if (lossTarget > 0 && botSession.session_loss >= lossTarget) {
+                // Loss target reached
+                await this.bot.sendMessage(userId, `LOSS TARGET REACHED!\n\n` +
+                    `Target: ${lossTarget.toLocaleString()} K\n` +
+                    `Actual Loss: ${botSession.session_loss.toLocaleString()} K\n` +
+                    `Achievement: ${Math.round((botSession.session_loss / lossTarget) * 100)}%\n\n` +
+                    `Auto Bot has been stopped automatically to prevent further losses.`, {
+                    reply_markup: this.getMainKeyboard(userSessions[userId].language)
+                });
+                
+                // Stop the bot
+                if (autoBettingTasks[userId]) {
+                    delete autoBettingTasks[userId];
+                }
+                if (waitingForResults[userId]) {
+                    delete waitingForResults[userId];
+                }
+                await this.saveBotSession(userId, false);
+            }
+        } catch (error) {
+            console.error(`Error checking profit/loss targets:`, error);
         }
     }
 }
 
 // Start the bot
 console.log("Auto Lottery Bot starting...");
-console.log("Game ID Restriction System: ✅ ENABLED");
+console.log("Game ID Restriction System: ENABLED");
 console.log("Admin Commands: /addgameid, /removegameid, /listgameids, /gameidstats");
 console.log(`Admin User ID: ${ADMIN_USER_ID}`);
 console.log("Features: Wait for Win/Loss before next bet");
