@@ -2337,214 +2337,216 @@ Last Update: ${new Date().toLocaleString()}`;
     // NEW: Enhanced SL Layer Betting Logic with Fake Bets
    // NEW: Enhanced SL Layer Betting Logic with Fake Bets
 async processSlLayerBetting(userId, slPatternData) {
-    const userSession = userSessions[userId];
-    if (!userSession) return { betType: null, betTypeStr: null, isRealBet: false, isFakeBet: false };
+        const userSession = userSessions[userId];
+        if (!userSession) return { betType: null, betTypeStr: null, isRealBet: false, isFakeBet: false };
 
-    const patternArray = slPatternData.pattern.split(',').map(p => parseInt(p.trim()));
-    const currentSl = slPatternData.current_sl || 1;
-    const waitLossCount = slPatternData.wait_loss_count || 0;
-    const betCount = slPatternData.bet_count || 0;
+        const patternArray = slPatternData.pattern.split(',').map(p => parseInt(p.trim()));
+        const currentSl = slPatternData.current_sl || 1;
+        const waitLossCount = slPatternData.wait_loss_count || 0;
+        const betCount = slPatternData.bet_count || 0;
 
-    // Get user's selected betting mode
-    const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
-    const patternsData = await this.getFormulaPatterns(userId);
-    const bsPattern = patternsData.bs_pattern || "";
-    const colourPattern = patternsData.colour_pattern || "";
+        // Get user's selected betting mode
+        const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
+        const patternsData = await this.getFormulaPatterns(userId);
+        const bsPattern = patternsData.bs_pattern || "";
+        const colourPattern = patternsData.colour_pattern || "";
 
-    console.log(`🔍 SL Debug - User: ${userId}, SL: ${currentSl}, WaitLoss: ${waitLossCount}, BetCount: ${betCount}`);
+        console.log(`🔍 SL Debug - User: ${userId}, SL: ${currentSl}, WaitLoss: ${waitLossCount}, BetCount: ${betCount}`);
 
-    // 🛑 FIXED: Correct phase determination
-    const isInWaitPhase = (currentSl > 1 && betCount === 0 && waitLossCount === 0) || // Start with wait for SL > 1
-                         (betCount >= 3 && waitLossCount < currentSl) || // After 3 betting losses, go to wait
-                         (currentSl > 1 && waitLossCount < currentSl);   // Continue wait until required losses
+        // Phase determination logic
+        const isInWaitPhase = (currentSl > 1 && betCount === 0 && waitLossCount === 0) || 
+                             (betCount >= 3 && waitLossCount < currentSl) || 
+                             (currentSl > 1 && waitLossCount < currentSl);
 
-    const isInBettingPhase = (currentSl === 1 && betCount < 3) || // SL 1 starts with betting
-                           (waitLossCount >= currentSl && betCount < 3); // After completing wait losses
+        const isInBettingPhase = (currentSl === 1 && betCount < 3) || 
+                               (waitLossCount >= currentSl && betCount < 3);
 
-    console.log(`🔍 SL Debug - WaitPhase: ${isInWaitPhase}, BettingPhase: ${isInBettingPhase}`);
+        console.log(`🔍 SL Debug - WaitPhase: ${isInWaitPhase}, BettingPhase: ${isInBettingPhase}`);
 
-    if (isInWaitPhase) {
-        // 🎯 WAIT PHASE - Show fake bets and monitor results
-        console.log(`🔍 SL Debug - Entering WAIT PHASE for user ${userId}, SL: ${currentSl}`);
-        
-        const waitSession = await this.getSlWaitSession(userId);
-        
-        if (!waitSession.is_wait_mode) {
-            // Start wait mode
-            await this.saveSlWaitSession(userId, true, '', '', 0, 0);
-            this.bot.sendMessage(userId, 
-                `🎯 SL Layer Wait Mode Started!\n\n` +
-                `Current SL: ${currentSl}\n` +
-                `Wait Phase: Monitoring ${currentSl} loss(es)\n` +
-                `Wait Loss Count: ${waitLossCount}/${currentSl}\n\n` +
-                `Fake bets will be shown with real results.`
-            ).catch(console.error);
-        }
-
-        // In wait phase, show fake bet based on user's betting mode
-        let fakeBetType, fakeBetTypeStr;
-
-        // Determine fake bet type based on user's selected mode
-        if (bsPattern && bsPattern !== "") {
-            // BS Formula Mode - Fake bet
-            const patternArrayBS = bsPattern.split(',').map(p => p.trim());
-            const currentIndexBS = patternsData.bs_current_index || 0;
+        if (isInWaitPhase) {
+            // WAIT PHASE - Show fake bets and monitor results
+            console.log(`🔍 SL Debug - Entering WAIT PHASE for user ${userId}, SL: ${currentSl}`);
             
-            if (currentIndexBS < patternArrayBS.length) {
-                const patternChar = patternArrayBS[currentIndexBS].toUpperCase();
-                fakeBetType = patternChar === 'B' ? 13 : 14;
-                fakeBetTypeStr = `${patternChar === 'B' ? 'BIG' : 'SMALL'} (BS Formula - Fake)`;
+            const waitSession = await this.getSlWaitSession(userId);
+            
+            if (!waitSession.is_wait_mode) {
+                // Start wait mode
+                await this.saveSlWaitSession(userId, true, '', '', 0, 0);
+                this.bot.sendMessage(userId, 
+                    `🎯 SL Layer Wait Mode Started!\n\n` +
+                    `Current SL: ${currentSl}\n` +
+                    `Wait Phase: Monitoring ${currentSl} loss(es)\n` +
+                    `Wait Loss Count: ${waitLossCount}/${currentSl}\n\n` +
+                    `Fake bets will be shown with real results.`
+                ).catch(console.error);
+            }
+
+            // In wait phase, show fake bet based on user's betting mode
+            let fakeBetType, fakeBetTypeStr;
+
+            // Determine fake bet type based on user's selected mode
+            if (bsPattern && bsPattern !== "") {
+                // BS Formula Mode - Fake bet
+                const patternArrayBS = bsPattern.split(',').map(p => p.trim());
+                const currentIndexBS = patternsData.bs_current_index || 0;
                 
-                // Update pattern position for fake bets too (for consistency)
-                const newIndex = (currentIndexBS + 1) % patternArrayBS.length;
-                await this.db.run(
-                    'UPDATE formula_patterns SET bs_current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-                    [newIndex, userId]
-                );
+                if (currentIndexBS < patternArrayBS.length) {
+                    const patternChar = patternArrayBS[currentIndexBS].toUpperCase();
+                    fakeBetType = patternChar === 'B' ? 13 : 14;
+                    fakeBetTypeStr = `${patternChar === 'B' ? 'BIG' : 'SMALL'} (BS Formula - Fake)`;
+                    
+                    // Update pattern position for fake bets too (for consistency)
+                    const newIndex = (currentIndexBS + 1) % patternArrayBS.length;
+                    await this.db.run(
+                        'UPDATE formula_patterns SET bs_current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+                        [newIndex, userId]
+                    );
+                } else {
+                    fakeBetType = Math.random() < 0.5 ? 13 : 14;
+                    fakeBetTypeStr = fakeBetType === 13 ? "BIG (Fake)" : "SMALL (Fake)";
+                }
+            } else if (colourPattern && colourPattern !== "") {
+                // Colour Formula Mode - Fake bet
+                const patternArrayColour = colourPattern.split(',').map(p => p.trim());
+                const currentIndexColour = patternsData.colour_current_index || 0;
+                
+                if (currentIndexColour < patternArrayColour.length) {
+                    const patternChar = patternArrayColour[currentIndexColour].toUpperCase();
+                    if (patternChar === 'R') {
+                        fakeBetType = 10;
+                        fakeBetTypeStr = "RED (Colour Formula - Fake)";
+                    } else if (patternChar === 'G') {
+                        fakeBetType = 11;
+                        fakeBetTypeStr = "GREEN (Colour Formula - Fake)";
+                    } else if (patternChar === 'V') {
+                        fakeBetType = 12;
+                        fakeBetTypeStr = "VIOLET (Colour Formula - Fake)";
+                    }
+                    
+                    // Update pattern position for fake bets too
+                    const newIndex = (currentIndexColour + 1) % patternArrayColour.length;
+                    await this.db.run(
+                        'UPDATE formula_patterns SET colour_current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+                        [newIndex, userId]
+                    );
+                } else {
+                    const colours = ["RED", "GREEN", "VIOLET"];
+                    const randomColour = colours[Math.floor(Math.random() * colours.length)];
+                    fakeBetType = COLOUR_BET_TYPES[randomColour];
+                    fakeBetTypeStr = `${randomColour} (Fake)`;
+                }
+            } else if (randomMode === 'follow') {
+                // Follow Bot Mode - Fake bet
+                const followResult = await this.getFollowBetType(userSession.apiInstance);
+                fakeBetType = followResult.betType;
+                fakeBetTypeStr = `${followResult.betTypeStr} (Follow - Fake)`;
+            } else if (randomMode === 'big') {
+                // Random BIG Mode - Fake bet
+                fakeBetType = 13;
+                fakeBetTypeStr = "BIG (Fake)";
+            } else if (randomMode === 'small') {
+                // Random SMALL Mode - Fake bet
+                fakeBetType = 14;
+                fakeBetTypeStr = "SMALL (Fake)";
             } else {
+                // Random Bot Mode - Fake bet
                 fakeBetType = Math.random() < 0.5 ? 13 : 14;
                 fakeBetTypeStr = fakeBetType === 13 ? "BIG (Fake)" : "SMALL (Fake)";
             }
-        } else if (colourPattern && colourPattern !== "") {
-            // Colour Formula Mode - Fake bet
-            const patternArrayColour = colourPattern.split(',').map(p => p.trim());
-            const currentIndexColour = patternsData.colour_current_index || 0;
+
+            console.log(`🔍 SL Debug - Fake Bet for user ${userId}: ${fakeBetTypeStr}`);
+            return { 
+                betType: fakeBetType, 
+                betTypeStr: fakeBetTypeStr, 
+                isRealBet: false, 
+                isFakeBet: true 
+            };
+
+        } else if (isInBettingPhase) {
+            // BETTING PHASE - Place real bets
+            console.log(`🔍 SL Debug - Entering BETTING PHASE for user ${userId}`);
             
-            if (currentIndexColour < patternArrayColour.length) {
-                const patternChar = patternArrayColour[currentIndexColour].toUpperCase();
-                if (patternChar === 'R') {
-                    fakeBetType = 10;
-                    fakeBetTypeStr = "RED (Colour Formula - Fake)";
-                } else if (patternChar === 'G') {
-                    fakeBetType = 11;
-                    fakeBetTypeStr = "GREEN (Colour Formula - Fake)";
-                } else if (patternChar === 'V') {
-                    fakeBetType = 12;
-                    fakeBetTypeStr = "VIOLET (Colour Formula - Fake)";
+            let betType, betTypeStr;
+
+            // Determine bet type based on user's selected mode
+            if (bsPattern && bsPattern !== "") {
+                // BS Formula Mode
+                const patternArrayBS = bsPattern.split(',').map(p => p.trim());
+                const currentIndexBS = patternsData.bs_current_index || 0;
+                
+                if (currentIndexBS < patternArrayBS.length) {
+                    const patternChar = patternArrayBS[currentIndexBS].toUpperCase();
+                    betType = patternChar === 'B' ? 13 : 14;
+                    betTypeStr = `${patternChar === 'B' ? 'BIG' : 'SMALL'} (BS Formula)`;
+                    
+                    // Update pattern position
+                    const newIndex = (currentIndexBS + 1) % patternArrayBS.length;
+                    await this.db.run(
+                        'UPDATE formula_patterns SET bs_current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+                        [newIndex, userId]
+                    );
+                } else {
+                    betType = Math.random() < 0.5 ? 13 : 14;
+                    betTypeStr = betType === 13 ? "BIG" : "SMALL";
                 }
+            } else if (colourPattern && colourPattern !== "") {
+                // Colour Formula Mode
+                const patternArrayColour = colourPattern.split(',').map(p => p.trim());
+                const currentIndexColour = patternsData.colour_current_index || 0;
                 
-                // Update pattern position for fake bets too
-                const newIndex = (currentIndexColour + 1) % patternArrayColour.length;
-                await this.db.run(
-                    'UPDATE formula_patterns SET colour_current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-                    [newIndex, userId]
-                );
+                if (currentIndexColour < patternArrayColour.length) {
+                    const patternChar = patternArrayColour[currentIndexColour].toUpperCase();
+                    if (patternChar === 'R') {
+                        betType = 10; // RED
+                        betTypeStr = "RED (Colour Formula)";
+                    } else if (patternChar === 'G') {
+                        betType = 11; // GREEN
+                        betTypeStr = "GREEN (Colour Formula)";
+                    } else if (patternChar === 'V') {
+                        betType = 12; // VIOLET
+                        betTypeStr = "VIOLET (Colour Formula)";
+                    }
+                    
+                    // Update pattern position
+                    const newIndex = (currentIndexColour + 1) % patternArrayColour.length;
+                    await this.db.run(
+                        'UPDATE formula_patterns SET colour_current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+                        [newIndex, userId]
+                    );
+                } else {
+                    const colours = ["RED", "GREEN", "VIOLET"];
+                    const randomColour = colours[Math.floor(Math.random() * colours.length)];
+                    betType = COLOUR_BET_TYPES[randomColour];
+                    betTypeStr = `${randomColour}`;
+                }
+            } else if (randomMode === 'follow') {
+                // Follow Bot Mode
+                const followResult = await this.getFollowBetType(userSession.apiInstance);
+                betType = followResult.betType;
+                betTypeStr = followResult.betTypeStr;
             } else {
-                const colours = ["RED", "GREEN", "VIOLET"];
-                const randomColour = colours[Math.floor(Math.random() * colours.length)];
-                fakeBetType = COLOUR_BET_TYPES[randomColour];
-                fakeBetTypeStr = `${randomColour} (Fake)`;
-            }
-        } else if (randomMode === 'follow') {
-            // Follow Bot Mode - Fake bet
-            const followResult = await this.getFollowBetType(userSession.apiInstance);
-            fakeBetType = followResult.betType;
-            fakeBetTypeStr = `${followResult.betTypeStr} (Follow - Fake)`;
-        } else if (randomMode === 'big') {
-            // Random BIG Mode - Fake bet
-            fakeBetType = 13;
-            fakeBetTypeStr = "BIG (Fake)";
-        } else if (randomMode === 'small') {
-            // Random SMALL Mode - Fake bet
-            fakeBetType = 14;
-            fakeBetTypeStr = "SMALL (Fake)";
-        } else {
-            // Random Bot Mode - Fake bet
-            fakeBetType = Math.random() < 0.5 ? 13 : 14;
-            fakeBetTypeStr = fakeBetType === 13 ? "BIG (Fake)" : "SMALL (Fake)";
-        }
-
-        console.log(`🔍 SL Debug - Fake Bet for user ${userId}: ${fakeBetTypeStr}`);
-        return { 
-            betType: fakeBetType, 
-            betTypeStr: fakeBetTypeStr, 
-            isRealBet: false, 
-            isFakeBet: true 
-        };
-
-    } else if (isInBettingPhase) {
-        // 🎯 BETTING PHASE - Place real bets
-        console.log(`🔍 SL Debug - Entering BETTING PHASE for user ${userId}`);
-        
-        let betType, betTypeStr;
-
-        // Determine bet type based on user's selected mode
-        if (bsPattern && bsPattern !== "") {
-            // BS Formula Mode
-            const patternArrayBS = bsPattern.split(',').map(p => p.trim());
-            const currentIndexBS = patternsData.bs_current_index || 0;
-            
-            if (currentIndexBS < patternArrayBS.length) {
-                const patternChar = patternArrayBS[currentIndexBS].toUpperCase();
-                betType = patternChar === 'B' ? 13 : 14;
-                betTypeStr = `${patternChar === 'B' ? 'BIG' : 'SMALL'} (BS Formula)`;
-                
-                // Update pattern position
-                const newIndex = (currentIndexBS + 1) % patternArrayBS.length;
-                await this.db.run(
-                    'UPDATE formula_patterns SET bs_current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-                    [newIndex, userId]
-                );
-            } else {
+                // Random Bot Mode (default)
                 betType = Math.random() < 0.5 ? 13 : 14;
                 betTypeStr = betType === 13 ? "BIG" : "SMALL";
             }
-        } else if (colourPattern && colourPattern !== "") {
-            // Colour Formula Mode
-            const patternArrayColour = colourPattern.split(',').map(p => p.trim());
-            const currentIndexColour = patternsData.colour_current_index || 0;
+
+            // Update bet count
+            await this.db.run(
+                'UPDATE sl_patterns SET bet_count = bet_count + 1 WHERE user_id = ?',
+                [userId]
+            );
+
+            console.log(`🔍 SL Debug - Real Bet for user ${userId}: ${betTypeStr}, BetCount: ${betCount + 1}`);
+            return { betType, betTypeStr, isRealBet: true, isFakeBet: false };
             
-            if (currentIndexColour < patternArrayColour.length) {
-                const patternChar = patternArrayColour[currentIndexColour].toUpperCase();
-                if (patternChar === 'R') {
-                    betType = 10; // RED
-                    betTypeStr = "RED (Colour Formula)";
-                } else if (patternChar === 'G') {
-                    betType = 11; // GREEN
-                    betTypeStr = "GREEN (Colour Formula)";
-                } else if (patternChar === 'V') {
-                    betType = 12; // VIOLET
-                    betTypeStr = "VIOLET (Colour Formula)";
-                }
-                
-                // Update pattern position
-                const newIndex = (currentIndexColour + 1) % patternArrayColour.length;
-                await this.db.run(
-                    'UPDATE formula_patterns SET colour_current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-                    [newIndex, userId]
-                );
-            } else {
-                const colours = ["RED", "GREEN", "VIOLET"];
-                const randomColour = colours[Math.floor(Math.random() * colours.length)];
-                betType = COLOUR_BET_TYPES[randomColour];
-                betTypeStr = `${randomColour}`;
-            }
-        } else if (randomMode === 'follow') {
-            // Follow Bot Mode
-            const followResult = await this.getFollowBetType(userSession.apiInstance);
-            betType = followResult.betType;
-            betTypeStr = followResult.betTypeStr;
         } else {
-            // Random Bot Mode (default)
-            betType = Math.random() < 0.5 ? 13 : 14;
-            betTypeStr = betType === 13 ? "BIG" : "SMALL";
+            // Should not reach here, but as fallback
+            console.log(`🔍 SL Debug - Fallback to WAIT PHASE for user ${userId}`);
+            return { betType: null, betTypeStr: null, isRealBet: false, isFakeBet: false };
         }
-
-        // Update bet count
-        await this.db.run(
-            'UPDATE sl_patterns SET bet_count = bet_count + 1 WHERE user_id = ?',
-            [userId]
-        );
-
-        console.log(`🔍 SL Debug - Real Bet for user ${userId}: ${betTypeStr}, BetCount: ${betCount + 1}`);
-        return { betType, betTypeStr, isRealBet: true, isFakeBet: false };
+    }
         
-          } else {
-        // Should not reach here, but as fallback
-        console.log(`🔍 SL Debug - Fallback to WAIT PHASE for user ${userId}`);
-        return { betType: null, betTypeStr: null, isRealBet: false, isFakeBet: false };
-           }
-          } else {
+        } else {
         // WAIT PHASE - Show fake bets and check real results
         const waitSession = await this.getSlWaitSession(userId);
         
