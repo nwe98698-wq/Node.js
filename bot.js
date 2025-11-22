@@ -4,11 +4,6 @@ const axios = require('axios');
 const crypto = require('crypto');
 const moment = require('moment-timezone');
 
-// Myanmar time format
-const getMyanmarTime = () => {
-    return moment().tz('Asia/Yangon').format('YYYY-MM-DD HH:mm:ss');
-};
-
 // Bot configuration
 const BOT_TOKEN = "8006342815:AAHyl0Aamf5fCyj4u0EgYil0zhUcisFnXq0";
 const CHANNEL_USERNAME = "@Vipsafesingalchannel298";
@@ -36,6 +31,11 @@ const issueCheckers = {};
 const autoBettingTasks = {};
 const waitingForResults = {};
 const processedIssues = {};
+
+// Myanmar time function
+const getMyanmarTime = () => {
+    return moment().tz('Asia/Yangon').format('YYYY-MM-DD HH:mm:ss');
+};
 
 class Database {
     constructor() {
@@ -929,7 +929,7 @@ User ID: ${user_id_display}
 Balance: ${balance.toLocaleString()} K
 Status: LOGGED IN
 
-Last Update: ${getMyanmarTime()}`;
+Last update: ${getMyanmarTime()}`;
 
             await this.bot.sendMessage(chatId, balanceText);
         } catch (error) {
@@ -965,7 +965,7 @@ Last Update: ${getMyanmarTime()}`;
                 resultsText += `${i+1}. ${issueNo} - ${number} - ${resultType} ${colour}\n`;
             });
 
-            resultsText += `\nLast updated: ${moment().format('YYYY-MM-DD HH:mm:ss')}`;
+            resultsText += `\nLast updated: ${getMyanmarTime()}`;
 
             await this.bot.sendMessage(chatId, resultsText);
         } catch (error) {
@@ -1305,8 +1305,12 @@ Choose your betting mode:`;
 
         const startMessage = `Auto Bot Started!
 
+Platform: 777 Big Win
+Betting Mode: ${modeText}
+Bet Sequence: ${betSequence}
+Current Bet: ${currentAmount.toLocaleString()} K${formulaStatus}${targetInfo}
 
-`;
+Bot is now running automatically!`;
 
         await this.bot.sendMessage(chatId, startMessage);
 
@@ -1327,7 +1331,7 @@ Choose your betting mode:`;
         await this.db.run('DELETE FROM pending_bets WHERE user_id = ?', [userId]);
         await this.saveBotSession(userId, false);
 
-        await this.bot.sendMessage(chatId, `Auto Bot Stopped!\n`);
+        await this.bot.sendMessage(chatId, `Auto Bot Stopped!\n\nLast update: ${getMyanmarTime()}`);
     }
 
     async setRandomBig(chatId, userId) {
@@ -1404,7 +1408,7 @@ Choose your betting mode:`;
                 });
             } else {
                 const progress = Math.min(100, Math.round((netProfit / targetAmount) * 100));
-                await this.bot.sendMessage(chatId, `Profit Target Set!\n\nTarget: ${targetAmount.toLocaleString()} K\n (${netProfit.toLocaleString()}/${targetAmount.toLocaleString()} K)\n\nBot will automatically stop when profit reaches ${targetAmount.toLocaleString()} K`, {
+                await this.bot.sendMessage(chatId, `Profit Target Set!\n\nTarget: ${targetAmount.toLocaleString()} K\nCurrent Progress: ${progress}% (${netProfit.toLocaleString()}/${targetAmount.toLocaleString()} K)\n\nBot will automatically stop when profit reaches ${targetAmount.toLocaleString()} K`, {
                     reply_markup: this.getBotSettingsKeyboard()
                 });
             }
@@ -1432,7 +1436,7 @@ Choose your betting mode:`;
                     reply_markup: this.getBotSettingsKeyboard()
                 });
             } else {
-                await this.bot.sendMessage(chatId, `Loss Target Set!\n\nTarget: ${targetAmount.toLocaleString()} K\n (${botSession.session_loss.toLocaleString()}/${targetAmount.toLocaleString()} K)\n\nBot will automatically stop when loss reaches ${targetAmount.toLocaleString()} K`, {
+                await this.bot.sendMessage(chatId, `Loss Target Set!\n\nTarget: ${targetAmount.toLocaleString()} K\nCurrent Progress: ${progress}% (${botSession.session_loss.toLocaleString()}/${targetAmount.toLocaleString()} K)\n\nBot will automatically stop when loss reaches ${targetAmount.toLocaleString()} K`, {
                     reply_markup: this.getBotSettingsKeyboard()
                 });
             }
@@ -1541,7 +1545,7 @@ Choose an option to manage your Colour pattern:`;
         const patternsData = await this.getFormulaPatterns(userId);
         
         if (patternsData.bs_pattern) {
-            await this.bot.sendMessage(chatId, `Current BS Pattern: ${patternsData.bs_pattern}\nCurrent Position: ${patternsData.bs_current_index}`);
+            await this.bot.sendMessage(chatId, `Current BS Pattern: ${patternsData.bs_pattern}\nCurrent Position: ${patternsData.bs_current_index + 1}\nLast Updated: ${getMyanmarTime()}`);
         } else {
             await this.bot.sendMessage(chatId, "No BS Pattern Set");
         }
@@ -1551,7 +1555,7 @@ Choose an option to manage your Colour pattern:`;
         const patternsData = await this.getFormulaPatterns(userId);
         
         if (patternsData.colour_pattern) {
-            await this.bot.sendMessage(chatId, `Current Colour Pattern: ${patternsData.colour_pattern}\nCurrent Position: ${patternsData.colour_current_index}`);
+            await this.bot.sendMessage(chatId, `Current Colour Pattern: ${patternsData.colour_pattern}\nCurrent Position: ${patternsData.colour_current_index + 1}\nLast Updated: ${getMyanmarTime()}`);
         } else {
             await this.bot.sendMessage(chatId, "No Colour Pattern Set");
         }
@@ -1600,11 +1604,16 @@ Session Data:
 - Session Profit: ${botSession.session_profit.toLocaleString()} K
 - Session Loss: ${botSession.session_loss.toLocaleString()} K
 - Net Profit: ${netProfit.toLocaleString()} K
+- Total Bets: ${botSession.total_bets}
 - Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}
 
 Profit/Loss Targets:
 - Profit Target: ${profitTarget > 0 ? profitTarget.toLocaleString() + ' K' : 'Disabled'}
+- Progress: ${profitProgress}
 - Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
+- Progress: ${lossProgress}
+
+Last Updated: ${getMyanmarTime()}
 
 Session statistics reset when bot starts`;
 
@@ -1621,52 +1630,52 @@ Session statistics reset when bot starts`;
     }
 
     async showBotInfo(chatId, userId) {
-    const userSession = userSessions[userId];
-    
-    try {
-        let userInfo = {};
-        let balance = 0;
-        if (userSession.loggedIn && userSession.apiInstance) {
-            balance = await userSession.apiInstance.getBalance();
-            userInfo = await userSession.apiInstance.getUserInfo();
-        }
-
-        const user_id_display = userInfo.userId || 'N/A';
-        const phone = userSession.phone || 'Not logged in';
+        const userSession = userSessions[userId];
         
-        const botSession = await this.getBotSession(userId);
-        const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
-        const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
-        const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
-        const currentAmount = await this.getCurrentBetAmount(userId);
-        
-        // Formula patterns
-        const patternsData = await this.getFormulaPatterns(userId);
-        const bsPattern = patternsData.bs_pattern || "";
-        const colourPattern = patternsData.colour_pattern || "";
-        
-        // Profit/Loss Target
-        const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
-        const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
+        try {
+            let userInfo = {};
+            let balance = 0;
+            if (userSession.loggedIn && userSession.apiInstance) {
+                balance = await userSession.apiInstance.getBalance();
+                userInfo = await userSession.apiInstance.getUserInfo();
+            }
 
-        const modeText = {
-            'big': "Random BIG Only",
-            'small': "Random SMALL Only", 
-            'bot': "Random Bot",
-            'follow': "Follow Bot"
-        }[randomMode] || "Random Bot";
+            const user_id_display = userInfo.userId || 'N/A';
+            const phone = userSession.phone || 'Not logged in';
+            
+            const botSession = await this.getBotSession(userId);
+            const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
+            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
+            const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
+            const currentAmount = await this.getCurrentBetAmount(userId);
+            
+            // Formula patterns
+            const patternsData = await this.getFormulaPatterns(userId);
+            const bsPattern = patternsData.bs_pattern || "";
+            const colourPattern = patternsData.colour_pattern || "";
+            
+            // Profit/Loss Target
+            const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
+            const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
 
-        const netProfit = botSession.session_profit - botSession.session_loss;
-        
-        // Formula status
-        let formulaStatus = "";
-        if (bsPattern) {
-            formulaStatus = `\n- BS Formula: ACTIVE (${bsPattern})`;
-        } else if (colourPattern) {
-            formulaStatus = `\n- Colour Formula: ACTIVE (${colourPattern})`;
-        }
+            const modeText = {
+                'big': "Random BIG Only",
+                'small': "Random SMALL Only", 
+                'bot': "Random Bot",
+                'follow': "Follow Bot"
+            }[randomMode] || "Random Bot";
 
-        const botInfoText = `BOT INFORMATION
+            const netProfit = botSession.session_profit - botSession.session_loss;
+            
+            // Formula status
+            let formulaStatus = "";
+            if (bsPattern) {
+                formulaStatus = `\n- BS Formula: ACTIVE (${bsPattern})`;
+            } else if (colourPattern) {
+                formulaStatus = `\n- Colour Formula: ACTIVE (${colourPattern})`;
+            }
+
+            const botInfoText = `BOT INFORMATION
 
 User Info:
 - User ID: ${user_id_display}
@@ -1690,14 +1699,14 @@ Bot Statistics:
 - Net Profit: ${netProfit.toLocaleString()} K
 - Total Bets: ${botSession.total_bets}
 
-Last Update: ${moment().format('YYYY-MM-DD HH:mm:ss')} (Myanmar Time)`;
+Last Update: ${getMyanmarTime()}`;
 
-        await this.bot.sendMessage(chatId, botInfoText);
-        
-    } catch (error) {
-        await this.bot.sendMessage(chatId, "Error loading bot information. Please try again.");
+            await this.bot.sendMessage(chatId, botInfoText);
+            
+        } catch (error) {
+            await this.bot.sendMessage(chatId, "Error loading bot information. Please try again.");
+        }
     }
-}
 
     // Database helper methods
     async saveUserCredentials(userId, phone, password, platform = '777') {
@@ -1974,7 +1983,7 @@ Last Update: ${moment().format('YYYY-MM-DD HH:mm:ss')} (Myanmar Time)`;
             gameIdsText += `${i+1}. ${gameId}\n`;
         });
 
-        gameIdsText += `\nTotal: ${gameIds.length} game IDs`;
+        gameIdsText += `\nTotal: ${gameIds.length} game IDs\nLast Updated: ${getMyanmarTime()}`;
         await this.bot.sendMessage(chatId, gameIdsText);
     }
 
@@ -2000,6 +2009,8 @@ Last Update: ${moment().format('YYYY-MM-DD HH:mm:ss')} (Myanmar Time)`;
         if (totalIds > 10) {
             statsText += `\n... and ${totalIds - 10} more`;
         }
+
+        statsText += `\n\nLast Updated: ${getMyanmarTime()}`;
 
         await this.bot.sendMessage(chatId, statsText);
     }
@@ -2181,7 +2192,7 @@ Last Update: ${moment().format('YYYY-MM-DD HH:mm:ss')} (Myanmar Time)`;
                 }
 
                 const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
-                const betText = `Auto Bet Placed!\n\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})`;
+                const betText = `Auto Bet Placed!\n\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})${betModeInfo}\n\nTime: ${getMyanmarTime()}`;
 
                 this.bot.sendMessage(userId, betText).catch(console.error);
             } else {
@@ -2393,14 +2404,23 @@ Last Update: ${moment().format('YYYY-MM-DD HH:mm:ss')} (Myanmar Time)`;
                 }
                 
                 resultMessage = `BET RESULT - WIN!\n\n` +
-                             
-                              `PROFIT: ${botSession.total_profit.toLocaleString()} K\n\n` +
-                              ``;
+                              `Issue: ${issue}\n` +
+                              `Type: ${betTypeStr}\n` +
+                              `Amount: ${amount.toLocaleString()} K\n` +
+                              `Payout: ${payoutRate}\n` +
+                              `Win Amount: ${totalWinAmount.toLocaleString()} K\n` +
+                              `Profit: +${profitLoss.toLocaleString()} K\n\n` +
+                              `TOTAL PROFIT: ${botSession.total_profit.toLocaleString()} K\n\n` +
+                              `Time: ${getMyanmarTime()}`;
             } else {
                 resultMessage = `BET RESULT - LOSE\n\n` +
-                              
-                              `PROFIT: ${botSession.total_profit.toLocaleString()} K\n\n` +
-                              ``;
+                              `Issue: ${issue}\n` +
+                              `Type: ${betTypeStr}\n` +
+                              `Amount: ${amount.toLocaleString()} K\n` +
+                              `Result: ${actualResult}\n` +
+                              `Loss: -${amount.toLocaleString()} K\n\n` +
+                              `TOTAL PROFIT: ${botSession.total_profit.toLocaleString()} K\n\n` +
+                              `Time: ${getMyanmarTime()}`;
             }
 
             // Send result message
@@ -2444,7 +2464,8 @@ Last Update: ${moment().format('YYYY-MM-DD HH:mm:ss')} (Myanmar Time)`;
                 await this.bot.sendMessage(userId, `PROFIT TARGET REACHED!\n\n` +
                     `Target: ${profitTarget.toLocaleString()} K\n` +
                     `Actual Profit: ${netProfit.toLocaleString()} K\n` +
-                    `Auto Bot has been stopped automatically.`, {
+                    `Auto Bot has been stopped automatically.\n\n` +
+                    `Time: ${getMyanmarTime()}`, {
                     reply_markup: this.getMainKeyboard()
                 });
                 
@@ -2463,7 +2484,8 @@ Last Update: ${moment().format('YYYY-MM-DD HH:mm:ss')} (Myanmar Time)`;
                 await this.bot.sendMessage(userId, `LOSS TARGET REACHED!\n\n` +
                     `Target: ${lossTarget.toLocaleString()} K\n` +
                     `Actual Loss: ${botSession.session_loss.toLocaleString()} K\n` +
-                    `Auto Bot has been stopped automatically to prevent further losses.`, {
+                    `Auto Bot has been stopped automatically to prevent further losses.\n\n` +
+                    `Time: ${getMyanmarTime()}`, {
                     reply_markup: this.getMainKeyboard()
                 });
                 
@@ -2496,6 +2518,7 @@ console.log("Profit/Loss Target System");
 console.log("Auto Statistics Tracking");
 console.log("Colour Betting Support (RED, GREEN, VIOLET)");
 console.log("Supported Platform: 777 Big Win ONLY");
+console.log("Myanmar Time System: ENABLED");
 console.log("Press Ctrl+C to stop.");
 
 const bot = new AutoLotteryBot();
