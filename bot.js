@@ -1414,7 +1414,7 @@ Choose your betting mode:`;
                 });
             } else {
                 const progress = Math.min(100, Math.round((netProfit / targetAmount) * 100));
-                await this.bot.sendMessage(chatId, `Profit Target Set!\n\nTarget: ${targetAmount.toLocaleString()} K\nCurrent Progress: ${progress}% (${netProfit.toLocaleString()}/${targetAmount.toLocaleString()} K)\n\nBot will automatically stop when profit reaches ${targetAmount.toLocaleString()} K`, {
+                await this.bot.sendMessage(chatId, `Profit Target Set!\n\nTarget: ${targetAmount.toLocaleString()} K (${netProfit.toLocaleString()}/${targetAmount.toLocaleString()} K)\n\nBot will automatically stop when profit reaches ${targetAmount.toLocaleString()} K`, {
                     reply_markup: this.getBotSettingsKeyboard()
                 });
             }
@@ -1442,7 +1442,7 @@ Choose your betting mode:`;
                     reply_markup: this.getBotSettingsKeyboard()
                 });
             } else {
-                await this.bot.sendMessage(chatId, `Loss Target Set!\n\nTarget: ${targetAmount.toLocaleString()} K\nCurrent Progress: ${progress}% (${botSession.session_loss.toLocaleString()}/${targetAmount.toLocaleString()} K)\n\nBot will automatically stop when loss reaches ${targetAmount.toLocaleString()} K`, {
+                await this.bot.sendMessage(chatId, `Loss Target Set!\n\nTarget: ${targetAmount.toLocaleString()} K (${botSession.session_loss.toLocaleString()}/${targetAmount.toLocaleString()} K)\n\nBot will automatically stop when loss reaches ${targetAmount.toLocaleString()} K`, {
                     reply_markup: this.getBotSettingsKeyboard()
                 });
             }
@@ -2198,7 +2198,7 @@ Last Update: ${getMyanmarTime()}`;
                 }
 
                 const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
-                const betText = `Auto Bet Placed!\n\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})${betModeInfo}\n`;
+                const betText = `Auto Bet Placed!\n\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})`;
 
                 this.bot.sendMessage(userId, betText).catch(console.error);
             } else {
