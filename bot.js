@@ -2,7 +2,6 @@ const TelegramBot = require('node-telegram-bot-api');
 const sqlite3 = require('sqlite3').verbose();
 const axios = require('axios');
 const crypto = require('crypto');
-const moment = require('moment-timezone');
 
 // Bot configuration
 const BOT_TOKEN = "8006342815:AAHyl0Aamf5fCyj4u0EgYil0zhUcisFnXq0";
@@ -32,9 +31,21 @@ const autoBettingTasks = {};
 const waitingForResults = {};
 const processedIssues = {};
 
-// Myanmar time function
+// Myanmar time function (without moment-timezone)
 const getMyanmarTime = () => {
-    return moment().tz('Asia/Yangon').format('YYYY-MM-DD HH:mm:ss');
+    const now = new Date();
+    // Myanmar is UTC+6:30
+    const myanmarOffset = 6.5 * 60 * 60 * 1000; // 6.5 hours in milliseconds
+    const myanmarTime = new Date(now.getTime() + myanmarOffset);
+    
+    const year = myanmarTime.getUTCFullYear();
+    const month = String(myanmarTime.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(myanmarTime.getUTCDate()).padStart(2, '0');
+    const hours = String(myanmarTime.getUTCHours()).padStart(2, '0');
+    const minutes = String(myanmarTime.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(myanmarTime.getUTCSeconds()).padStart(2, '0');
+    
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
 class Database {
