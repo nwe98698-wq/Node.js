@@ -2460,9 +2460,8 @@ Last Update: ${getMyanmarTime()}`;
                 // Profit target reached
                 await this.bot.sendMessage(userId, `PROFIT TARGET REACHED!\n\n` +
                     `Target: ${profitTarget.toLocaleString()} K\n` +
-                    `Actual Profit: ${netProfit.toLocaleString()} K\n` +
-                    `Auto Bot has been stopped automatically.\n\n` +
-                    `Time: ${getMyanmarTime()}`, {
+                 
+                    ``, {
                     reply_markup: this.getMainKeyboard()
                 });
                 
@@ -2480,9 +2479,9 @@ Last Update: ${getMyanmarTime()}`;
                 // Loss target reached
                 await this.bot.sendMessage(userId, `LOSS TARGET REACHED!\n\n` +
                     `Target: ${lossTarget.toLocaleString()} K\n` +
-                    `Actual Loss: ${botSession.session_loss.toLocaleString()} K\n` +
-                    `Auto Bot has been stopped automatically to prevent further losses.\n\n` +
-                    `Time: ${getMyanmarTime()}`, {
+                    
+                    
+                    ``, {
                     reply_markup: this.getMainKeyboard()
                 });
                 
