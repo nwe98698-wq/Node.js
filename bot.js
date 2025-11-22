@@ -1337,7 +1337,7 @@ Choose your betting mode:`;
         await this.db.run('DELETE FROM pending_bets WHERE user_id = ?', [userId]);
         await this.saveBotSession(userId, false);
 
-        await this.bot.sendMessage(chatId, `Auto Bot Stopped!/n`);
+        await this.bot.sendMessage(chatId, `Auto Bot Stopped!`);
     }
 
     async setRandomBig(chatId, userId) {
@@ -1636,52 +1636,52 @@ Session statistics reset when bot starts`;
     }
 
     async showBotInfo(chatId, userId) {
-        const userSession = userSessions[userId];
+    const userSession = userSessions[userId];
+    
+    try {
+        let userInfo = {};
+        let balance = 0;
+        if (userSession.loggedIn && userSession.apiInstance) {
+            balance = await userSession.apiInstance.getBalance();
+            userInfo = await userSession.apiInstance.getUserInfo();
+        }
+
+        const user_id_display = userInfo.userId || 'N/A';
+        const phone = userSession.phone || 'Not logged in';
         
-        try {
-            let userInfo = {};
-            let balance = 0;
-            if (userSession.loggedIn && userSession.apiInstance) {
-                balance = await userSession.apiInstance.getBalance();
-                userInfo = await userSession.apiInstance.getUserInfo();
-            }
+        const botSession = await this.getBotSession(userId);
+        const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
+        const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
+        const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
+        const currentAmount = await this.getCurrentBetAmount(userId);
+        
+        // Formula patterns
+        const patternsData = await this.getFormulaPatterns(userId);
+        const bsPattern = patternsData.bs_pattern || "";
+        const colourPattern = patternsData.colour_pattern || "";
+        
+        // Profit/Loss Target
+        const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
+        const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
 
-            const user_id_display = userInfo.userId || 'N/A';
-            const phone = userSession.phone || 'Not logged in';
-            
-            const botSession = await this.getBotSession(userId);
-            const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
-            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
-            const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
-            const currentAmount = await this.getCurrentBetAmount(userId);
-            
-            // Formula patterns
-            const patternsData = await this.getFormulaPatterns(userId);
-            const bsPattern = patternsData.bs_pattern || "";
-            const colourPattern = patternsData.colour_pattern || "";
-            
-            // Profit/Loss Target
-            const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
-            const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
-
-            const modeText = {
+        // Determine betting mode text
+        let modeText = "";
+        if (bsPattern && bsPattern !== "") {
+            modeText = `BS Formula (${bsPattern})`;
+        } else if (colourPattern && colourPattern !== "") {
+            modeText = `Colour Formula (${colourPattern})`;
+        } else {
+            modeText = {
                 'big': "Random BIG Only",
                 'small': "Random SMALL Only", 
                 'bot': "Random Bot",
                 'follow': "Follow Bot"
             }[randomMode] || "Random Bot";
+        }
 
-            const netProfit = botSession.session_profit - botSession.session_loss;
-            
-            // Formula status
-            let formulaStatus = "";
-            if (bsPattern) {
-                formulaStatus = `\n- BS Formula: ACTIVE (${bsPattern})`;
-            } else if (colourPattern) {
-                formulaStatus = `\n- Colour Formula: ACTIVE (${colourPattern})`;
-            }
-
-            const botInfoText = `BOT INFORMATION
+        const netProfit = botSession.session_profit - botSession.session_loss;
+        
+        const botInfoText = `BOT INFORMATION
 
 User Info:
 - User ID: ${user_id_display}
@@ -1690,7 +1690,7 @@ User Info:
 - Balance: ${balance.toLocaleString()} K
 
 Bot Settings:
-- Betting Mode: ${modeText}${formulaStatus}
+- Betting Mode: ${modeText}
 - Bet Sequence: ${betSequence}
 - Current Bet: ${currentAmount.toLocaleString()} K (Step ${currentIndex + 1})
 - Bot Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}
@@ -1707,12 +1707,12 @@ Bot Statistics:
 
 Last Update: ${getMyanmarTime()}`;
 
-            await this.bot.sendMessage(chatId, botInfoText);
-            
-        } catch (error) {
-            await this.bot.sendMessage(chatId, "Error loading bot information. Please try again.");
-        }
+        await this.bot.sendMessage(chatId, botInfoText);
+        
+    } catch (error) {
+        await this.bot.sendMessage(chatId, "Error loading bot information. Please try again.");
     }
+}
 
     // Database helper methods
     async saveUserCredentials(userId, phone, password, platform = '777') {
