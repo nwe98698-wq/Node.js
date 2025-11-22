@@ -1316,12 +1316,7 @@ Choose your betting mode:`;
 
         const startMessage = `Auto Bot Started!
 
-Platform: 777 Big Win
-Betting Mode: ${modeText}
-Bet Sequence: ${betSequence}
-Current Bet: ${currentAmount.toLocaleString()} K${formulaStatus}${targetInfo}
-
-Bot is now running automatically!`;
+`;
 
         await this.bot.sendMessage(chatId, startMessage);
 
@@ -1342,7 +1337,7 @@ Bot is now running automatically!`;
         await this.db.run('DELETE FROM pending_bets WHERE user_id = ?', [userId]);
         await this.saveBotSession(userId, false);
 
-        await this.bot.sendMessage(chatId, `Auto Bot Stopped!\n\nLast update: ${getMyanmarTime()}`);
+        await this.bot.sendMessage(chatId, `Auto Bot Stopped!/n`);
     }
 
     async setRandomBig(chatId, userId) {
@@ -1994,7 +1989,7 @@ Last Update: ${getMyanmarTime()}`;
             gameIdsText += `${i+1}. ${gameId}\n`;
         });
 
-        gameIdsText += `\nTotal: ${gameIds.length} game IDs\nLast Updated: ${getMyanmarTime()}`;
+        gameIdsText += `\nTotal: ${gameIds.length} game IDs\n`;
         await this.bot.sendMessage(chatId, gameIdsText);
     }
 
@@ -2203,7 +2198,7 @@ Last Update: ${getMyanmarTime()}`;
                 }
 
                 const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
-                const betText = `Auto Bet Placed!\n\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})${betModeInfo}\n\nTime: ${getMyanmarTime()}`;
+                const betText = `Auto Bet Placed!\n\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K (Step ${currentIndex + 1})${betModeInfo}\n`;
 
                 this.bot.sendMessage(userId, betText).catch(console.error);
             } else {
@@ -2415,23 +2410,14 @@ Last Update: ${getMyanmarTime()}`;
                 }
                 
                 resultMessage = `BET RESULT - WIN!\n\n` +
-                              `Issue: ${issue}\n` +
-                              `Type: ${betTypeStr}\n` +
-                              `Amount: ${amount.toLocaleString()} K\n` +
-                              `Payout: ${payoutRate}\n` +
-                              `Win Amount: ${totalWinAmount.toLocaleString()} K\n` +
-                              `Profit: +${profitLoss.toLocaleString()} K\n\n` +
-                              `TOTAL PROFIT: ${botSession.total_profit.toLocaleString()} K\n\n` +
-                              `Time: ${getMyanmarTime()}`;
+                           
+                              `PROFIT: ${botSession.total_profit.toLocaleString()} K\n\n` +
+                              ``;
             } else {
                 resultMessage = `BET RESULT - LOSE\n\n` +
-                              `Issue: ${issue}\n` +
-                              `Type: ${betTypeStr}\n` +
-                              `Amount: ${amount.toLocaleString()} K\n` +
-                              `Result: ${actualResult}\n` +
-                              `Loss: -${amount.toLocaleString()} K\n\n` +
-                              `TOTAL PROFIT: ${botSession.total_profit.toLocaleString()} K\n\n` +
-                              `Time: ${getMyanmarTime()}`;
+                            
+                              `PROFIT: ${botSession.total_profit.toLocaleString()} K\n\n` +
+                              ``;
             }
 
             // Send result message
