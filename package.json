@@ -2,10 +2,10 @@
   "name": "auto-lottery-bot",
   "version": "1.0.0",
   "description": "Auto Lottery Bot for Telegram",
-  "main": "index3.js",
+  "main": "bot.js",
   "scripts": {
-    "start": "node index3.js",
-    "dev": "nodemon index3.js"
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
   },
   "dependencies": {
     "node-telegram-bot-api": "^0.64.0",
