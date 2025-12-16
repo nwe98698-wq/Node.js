@@ -4,7 +4,7 @@ const axios = require('axios');
 const crypto = require('crypto');
 
 // BOT CONFIGURATION
-const BOT_TOKEN = "8006342815:AAGefRAJY--B497wKtlPJ7w8Y-xKEoKEZi0";
+const BOT_TOKEN = "8308226058:AAFrsSTKsGE9daTyxE5QDcBNO8ly1C8ivcc";
 const CHANNEL_USERNAME = "@Vipsafesingalchannel298";
 const CHANNEL_LINK = "https://t.me/Vipsafesingalchannel298";
 const ADMIN_USER_ID = "6328953001";
@@ -12,7 +12,8 @@ const ADMIN_USER_ID = "6328953001";
 // API ENDPOINTS
 const API_ENDPOINTS = {
     "777": "https://api.bigwinqaz.com/api/webapi/",
-    "TRX": "https://api.bigwinqaz.com/api/webapi/"
+    "TRX": "https://api.bigwinqaz.com/api/webapi/",
+    "CK": "https://ckygjf6r.com/api/webapi/"
 };
 
 // COLOUR BET TYPES
@@ -170,15 +171,37 @@ class LotteryAPI {
     constructor(platform = '777', gameType = 'WINGO') {
         this.platform = platform;
         this.gameType = gameType;
-        this.baseUrl = API_ENDPOINTS[platform];
+        this.baseUrl = API_ENDPOINTS[platform] || API_ENDPOINTS["777"];
         this.token = '';
         this.headers = {
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json;charset=UTF-8",
-            "Origin": "https://www.bigwinqaz.com",
-            "Referer": "https://www.bigwinqaz.com/",
+            "Origin": this.getOrigin(),
+            "Referer": this.getReferer(),
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         };
+    }
+
+    getOrigin() {
+        switch(this.platform) {
+            case 'CK':
+                return "https://ckygjf6r.com";
+            case '777':
+            case 'TRX':
+            default:
+                return "https://www.bigwinqaz.com";
+        }
+    }
+
+    getReferer() {
+        switch(this.platform) {
+            case 'CK':
+                return "https://ckygjf6r.com/";
+            case '777':
+            case 'TRX':
+            default:
+                return "https://www.bigwinqaz.com/";
+        }
     }
 
     signMd5(data) {
@@ -214,15 +237,34 @@ class LotteryAPI {
 
     async login(phone, password) {
         try {
-            const body = {
-                "phonetype": -1,
-                "language": 0,
-                "logintype": "mobile",
-                "random": "9078efc98754430e92e51da59eb2563c",
-                "username": `95${phone}`,
-                "pwd": password,
-                "timestamp": Math.floor(Date.now() / 1000)
-            };
+            let body;
+            
+            // CK platform အတွက် username format ပြင်ဆင်ခြင်း
+            if (this.platform === 'CK') {
+                // CK အတွက် phone number ကို country code ထည့်ရန် လိုအပ်သလားဆိုတာ စမ်းကြည့်ရမည်
+                // ဦးစွာ country code မပါဘဲ စမ်းကြည့်မည်
+                const cleanPhone = phone.replace(/^95/, ''); // 95 ရှိရင် ဖြုတ်မည်
+                body = {
+                    "phonetype": -1,
+                    "language": 0,
+                    "logintype": "mobile",
+                    "random": "9078efc98754430e92e51da59eb2563c",
+                    "username": cleanPhone, // CK အတွက် country code မပါ
+                    "pwd": password,
+                    "timestamp": Math.floor(Date.now() / 1000)
+                };
+            } else {
+                // 777 platform (original)
+                body = {
+                    "phonetype": -1,
+                    "language": 0,
+                    "logintype": "mobile",
+                    "random": "9078efc98754430e92e51da59eb2563c",
+                    "username": `95${phone}`,
+                    "pwd": password,
+                    "timestamp": Math.floor(Date.now() / 1000)
+                };
+            }
 
             body.signature = this.signMd5(body);
 
@@ -233,7 +275,7 @@ class LotteryAPI {
 
             if (response.status === 200) {
                 const result = response.data;
-                if (result.msgCode === 0) {
+                if (result.msgCode === 0 || result.code === 0 || result.success === true) {
                     const tokenData = result.data || {};
                     this.token = `${tokenData.tokenHeader || ''}${tokenData.token || ''}`;
                     this.headers.Authorization = this.token;
@@ -265,7 +307,7 @@ class LotteryAPI {
 
             if (response.status === 200) {
                 const result = response.data;
-                if (result.msgCode === 0) {
+                if (result.msgCode === 0 || result.code === 0) {
                     return result.data || {};
                 }
             }
@@ -292,7 +334,7 @@ class LotteryAPI {
 
             if (response.status === 200) {
                 const result = response.data;
-                if (result.msgCode === 0) {
+                if (result.msgCode === 0 || result.code === 0) {
                     return result.data?.amount || 0;
                 }
             }
@@ -342,19 +384,19 @@ class LotteryAPI {
             };
             body.signature = this.signMd5(body);
 
-            console.log(`GETTING CURRENT ISSUE FOR ${this.gameType}, TYPEID: ${typeId}`);
+            console.log(`GETTING CURRENT ISSUE FOR ${this.platform} - ${this.gameType}, TYPEID: ${typeId}`);
 
             const response = await axios.post(`${this.baseUrl}${endpoint}`, body, {
                 headers: this.headers,
                 timeout: 10000
             });
 
-            console.log(`ISSUE RESPONSE FOR ${this.gameType}:`, JSON.stringify(response.data));
+            console.log(`ISSUE RESPONSE FOR ${this.platform} - ${this.gameType}:`, JSON.stringify(response.data));
 
             if (response.status === 200) {
                 const result = response.data;
                 
-                if (result.msgCode === 0) {
+                if (result.msgCode === 0 || result.code === 0) {
                     let issueNumber = '';
                     
                     // TRX GAMES
@@ -400,18 +442,18 @@ class LotteryAPI {
                         }
                     }
                     
-                    console.log(`CURRENT ISSUE FOR ${this.gameType}: ${issueNumber}`);
+                    console.log(`CURRENT ISSUE FOR ${this.platform} - ${this.gameType}: ${issueNumber}`);
                     return issueNumber;
                 } else {
-                    console.log(`ERROR GETTING ISSUE FOR ${this.gameType}:`, result.msg);
+                    console.log(`ERROR GETTING ISSUE FOR ${this.platform} - ${this.gameType}:`, result.msg);
                     return "";
                 }
             } else {
-                console.log(`HTTP ERROR FOR ${this.gameType}:`, response.status);
+                console.log(`HTTP ERROR FOR ${this.platform} - ${this.gameType}:`, response.status);
                 return "";
             }
         } catch (error) {
-            console.error(`ERROR GETTING CURRENT ISSUE FOR ${this.gameType}:`, error.message);
+            console.error(`ERROR GETTING CURRENT ISSUE FOR ${this.platform} - ${this.gameType}:`, error.message);
             
             if (error.response) {
                 console.error('Error response data:', error.response.data);
@@ -429,7 +471,7 @@ class LotteryAPI {
 
     async placeBet(amount, betType) {
         try {
-            console.log(`ATTEMPTING TO PLACE BET - GAME: ${this.gameType}, AMOUNT: ${amount}, BETTYPE: ${betType}`);
+            console.log(`ATTEMPTING TO PLACE BET - PLATFORM: ${this.platform}, GAME: ${this.gameType}, AMOUNT: ${amount}, BETTYPE: ${betType}`);
             
             let issueId = "";
             let retryCount = 0;
@@ -454,7 +496,7 @@ class LotteryAPI {
                 };
             }
 
-            console.log(`SUCCESSFULLY GOT ISSUE: ${issueId} FOR ${this.gameType}`);
+            console.log(`SUCCESSFULLY GOT ISSUE: ${issueId} FOR ${this.platform} - ${this.gameType}`);
             console.log(`PLACING BET - ISSUE: ${issueId}, AMOUNT: ${amount}, BETTYPE: ${betType}, GAMETYPE: ${this.gameType}, PLATFORM: ${this.platform}`);
 
             let requestBody;
@@ -505,7 +547,7 @@ class LotteryAPI {
                 "timestamp": Math.floor(Date.now() / 1000)
             };
 
-            console.log(`777 PLATFORM CALCULATION - AMOUNT: ${amount}, BASEAMOUNT: ${baseAmount}, BETCOUNT: ${betCount}, TOTAL: ${baseAmount * betCount}`);
+            console.log(`${this.platform} PLATFORM CALCULATION - AMOUNT: ${amount}, BASEAMOUNT: ${baseAmount}, BETCOUNT: ${betCount}, TOTAL: ${baseAmount * betCount}`);
 
             requestBody.signature = this.signMd5(requestBody);
 
@@ -650,7 +692,7 @@ class LotteryAPI {
 
                 if (response.status === 200) {
                     const result = response.data;
-                    if (result.msgCode === 0) {
+                    if (result.msgCode === 0 || result.code === 0) {
                         const settled = result.data?.settled;
                         if (settled) {
                             const number = String(settled.number || '');
@@ -700,7 +742,7 @@ class LotteryAPI {
 
                 if (response.status === 200) {
                     const result = response.data;
-                    if (result.msgCode === 0) {
+                    if (result.msgCode === 0 || result.code === 0) {
                         const dataStr = JSON.stringify(response.data);
                         const startIdx = dataStr.indexOf('[');
                         const endIdx = dataStr.indexOf(']') + 1;
@@ -796,7 +838,7 @@ class AutoLotteryBot {
                     [{ text: "Balance" }, { text: "Results" }],
                     [{ text: "Bet BIG" }, { text: "Bet SMALL" }],
                     [{ text: "Bot Settings" }, { text: "My Bets" }],
-                    [{ text: "Bot Info" }, { text: "WINGO/TRX" }],
+                    [{ text: "Bot Info" }, { text: "Platform/Game" }],
                     [{ text: "Run Bot" }, { text: "Stop Bot" }]
                 ],
                 resize_keyboard: true
@@ -809,7 +851,7 @@ class AutoLotteryBot {
                     [{ text: "Bet BIG" }, { text: "Bet SMALL" }],
                     [{ text: "Bet RED" }, { text: "Bet GREEN" }, { text: "Bet VIOLET" }],
                     [{ text: "Bot Settings" }, { text: "My Bets" }],
-                    [{ text: "Bot Info" }, { text: "WINGO/TRX" }],
+                    [{ text: "Bot Info" }, { text: "Platform/Game" }],
                     [{ text: "Run Bot" }, { text: "Stop Bot" }]
                 ],
                 resize_keyboard: true
@@ -836,6 +878,16 @@ class AutoLotteryBot {
             keyboard: [
                 [{ text: "Enter Phone" }, { text: "Enter Password" }],
                 [{ text: "Login Now" },  { text: "Back" }]
+            ],
+            resize_keyboard: true
+        };
+    }
+
+    getPlatformKeyboard() {
+        return {
+            keyboard: [
+                [{ text: "777 Platform" }, { text: "CK Platform" }],
+                [{ text: "Back" }]
             ],
             resize_keyboard: true
         };
@@ -1020,10 +1072,12 @@ Auto Bot Features:
 
 Platform Support:
 - 777 Big Win (WINGO & TRX)
+- CK Platform (WINGO & TRX)
 
 Manual Features:
 - Real-time Balance
 - Game Results & History
+- Platform Selection
 - WINGO/TRX Game Switching
 - WINGO 30S/3MIN/5MIN Switching
 - TRX 3 MIN/5 MIN/10 MIN Support
@@ -1115,7 +1169,7 @@ Press Run Bot to start auto betting!`;
 
             switch (text) {
                 case "Login":
-                    await this.handleBigwinLogin(chatId, userId);
+                    await this.handleLoginPlatform(chatId, userId);
                     break;
                     
                 case "Balance":
@@ -1154,8 +1208,8 @@ Press Run Bot to start auto betting!`;
                     await this.showMyBets(chatId, userId);
                     break;
 
-                case "WINGO/TRX":
-                    await this.showGameTypeMenu(chatId, userId);
+                case "Platform/Game":
+                    await this.showPlatformMenu(chatId, userId);
                     break;
 
                 case "Run Bot":
@@ -1277,6 +1331,14 @@ Press Run Bot to start auto betting!`;
                     await this.handleSetGameType(chatId, userId, text);
                     break;
 
+                case "777 Platform":
+                    await this.handleSetPlatform(chatId, userId, '777');
+                    break;
+
+                case "CK Platform":
+                    await this.handleSetPlatform(chatId, userId, 'CK');
+                    break;
+
                 default:
                     await this.bot.sendMessage(chatId, "Please use the buttons below to navigate.", {
                         reply_markup: this.getMainKeyboard()
@@ -1288,9 +1350,17 @@ Press Run Bot to start auto betting!`;
         }
     }
 
-    async showGameTypeMenu(chatId, userId) {
+    async showPlatformMenu(chatId, userId) {
         const userSession = this.ensureUserSession(userId);
+        const currentPlatform = userSession.platform || '777';
         const currentGameType = userSession.gameType || 'WINGO';
+        
+        let platformInfo = "";
+        if (currentPlatform === '777') {
+            platformInfo = "\n\n777 Platform: Supports 777 Big Win Games";
+        } else if (currentPlatform === 'CK') {
+            platformInfo = "\n\nCK Platform: Supports CK Games";
+        }
         
         let gameTypeInfo = "";
         if (currentGameType === 'TRX') {
@@ -1311,9 +1381,14 @@ Press Run Bot to start auto betting!`;
             gameTypeInfo = "\n\nWINGO: Supports Bot BIG/SMALL and Colour betting";
         }
         
-        const gameTypeText = `Current Game Type: ${currentGameType}${gameTypeInfo}
+        const platformText = `Current Platform: ${currentPlatform}${platformInfo}
+Current Game Type: ${currentGameType}${gameTypeInfo}
 
-Select Game Type:
+Select Platform:
+• 777 Platform: 777 Big Win Games
+• CK Platform: CK Games
+
+Or select Game Type:
 • WINGO: (BIG/SMALL + Colours) Support
 • TRX: (BIG/SMALL) Support
 • TRX 3 MIN: (BIG/SMALL) Support
@@ -1321,13 +1396,50 @@ Select Game Type:
 • TRX 10 MIN: (BIG/SMALL) Support
 • WINGO 30S: (BIG/SMALL + Colours) Support 
 • WINGO 3 MIN: (BIG/SMALL + Colours) Support
-• WINGO 5 MIN: (BIG/SMALL + Colours) Support
+• WINGO 5 MIN: (BIG/SMALL + Colours) Support`;
 
-Choose your game type:`;
-
-        await this.bot.sendMessage(chatId, gameTypeText, {
-            reply_markup: this.getGameTypeKeyboard()
+        await this.bot.sendMessage(chatId, platformText, {
+            reply_markup: {
+                keyboard: [
+                    [{ text: "777 Platform" }, { text: "CK Platform" }],
+                    [{ text: "WINGO" }, { text: "TRX" }],
+                    [{ text: "WINGO 30S" }, { text: "WINGO 3 MIN" }],
+                    [{ text: "WINGO 5 MIN" }, { text: "TRX 3 MIN" }],
+                    [{ text: "TRX 5 MIN" }, { text: "TRX 10 MIN" }],
+                    [{ text: "Back" }]
+                ],
+                resize_keyboard: true
+            }
         });
+    }
+
+    async handleSetPlatform(chatId, userId, platform) {
+        try {
+            const userSession = this.ensureUserSession(userId);
+            
+            if (platform === '777' || platform === 'CK') {
+                userSession.platform = platform;
+                await this.saveUserSetting(userId, 'platform', platform);
+                
+                if (userSession.apiInstance) {
+                    userSession.apiInstance = new LotteryAPI(platform, userSession.gameType);
+                }
+                
+                userSession.step = 'main';
+                
+                const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
+                await this.bot.sendMessage(chatId, `Platform set to: ${platformName}`, {
+                    reply_markup: this.getMainKeyboard()
+                });
+            } else {
+                await this.bot.sendMessage(chatId, "Invalid platform. Please select from available options.", {
+                    reply_markup: this.getPlatformKeyboard()
+                });
+            }
+        } catch (error) {
+            console.error(`Error setting platform for user ${userId}:`, error);
+            await this.bot.sendMessage(chatId, "Error setting platform. Please try again.");
+        }
     }
 
     async handleSetGameType(chatId, userId, text) {
@@ -1376,13 +1488,16 @@ Choose your game type:`;
         }
     }
 
-    async handleBigwinLogin(chatId, userId) {
+    async handleLoginPlatform(chatId, userId) {
         const userSession = this.ensureUserSession(userId);
         userSession.step = 'login';
-        userSession.platform = '777';
-        userSession.apiInstance = new LotteryAPI('777', userSession.gameType);
+        
+        const platform = userSession.platform || '777';
+        const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
+        
+        userSession.apiInstance = new LotteryAPI(platform, userSession.gameType);
 
-        const loginGuide = `777 Big Win Login
+        const loginGuide = `${platformName} Login
 
 Please follow these steps:
 
@@ -1407,7 +1522,10 @@ Your credentials will be saved for future use!`;
             return;
         }
 
-        const loadingMsg = await this.bot.sendMessage(chatId, "Logging in... Please wait.");
+        const platform = userSession.platform || '777';
+        const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
+        
+        const loadingMsg = await this.bot.sendMessage(chatId, `Logging into ${platformName}... Please wait.`);
 
         try {
             const result = await userSession.apiInstance.login(userSession.phone, userSession.password);
@@ -1417,7 +1535,7 @@ Your credentials will be saved for future use!`;
                 const gameId = userInfo.userId || '';
                 
                 if (!await this.isGameIdAllowed(gameId)) {
-                    await this.bot.editMessageText(`Login Failed!\n\nGame ID: ${gameId}\nStatus: NOT ALLOWED\n\nPlease contact admin: @Smile_p2`, {
+                    await this.bot.editMessageText(`Login Failed!\n\nPlatform: ${platformName}\nGame ID: ${gameId}\nStatus: NOT ALLOWED\n\nPlease contact admin: @Smile_p2`, {
                         chat_id: chatId,
                         message_id: loadingMsg.message_id
                     });
@@ -1434,14 +1552,13 @@ Your credentials will be saved for future use!`;
                 await this.saveUserSetting(userId, 'auto_login', 1);
                 await this.saveUserSetting(userId, 'game_type', gameType);
 
-                const platformName = '777 Big Win';
-                
                 const successText = `Login Successful!
 
 Platform: ${platformName}
 Game ID: ${gameId}
 Account: ${userSession.phone}
 Balance: ${balance.toLocaleString()} K
+Game Type: ${gameType}
 
 Status: VERIFIED`;
 
@@ -1480,8 +1597,8 @@ Status: VERIFIED`;
             const userInfo = await userSession.apiInstance.getUserInfo();
             const user_id_display = userInfo.userId || 'N/A';
             const gameType = userSession.gameType || 'WINGO';
-
-            const platformName = '777 Big Win';
+            const platform = userSession.platform || '777';
+            const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
 
             const balanceText = `Account Information
 
@@ -1501,7 +1618,8 @@ Last update: ${getMyanmarTime()}`;
 
     async handleResults(chatId, userId) {
         const userSession = this.ensureUserSession(userId);
-        const platformName = '777 Big Win';
+        const platform = userSession.platform || '777';
+        const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
         const gameType = userSession.gameType || 'WINGO';
 
         try {
@@ -1509,7 +1627,7 @@ Last update: ${getMyanmarTime()}`;
             if (userSession.apiInstance) {
                 results = await userSession.apiInstance.getRecentResults(10);
             } else {
-                const api = new LotteryAPI(userSession.platform || '777', gameType);
+                const api = new LotteryAPI(platform, gameType);
                 results = await api.getRecentResults(10);
             }
 
@@ -1559,14 +1677,14 @@ Last update: ${getMyanmarTime()}`;
             const amount = await this.getCurrentBetAmount(userId);
             const betTypeStr = betType === 13 ? "BIG" : "SMALL";
             const gameType = userSession.gameType || 'WINGO';
+            const platform = userSession.platform || '777';
+            const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
 
             const balance = await userSession.apiInstance.getBalance();
             if (balance < amount) {
                 await this.bot.sendMessage(chatId, `Insufficient balance! You have ${balance.toLocaleString()} K but need ${amount.toLocaleString()} K`);
                 return;
             }
-
-            const platformName = '777 Big Win';
 
             const loadingMsg = await this.bot.sendMessage(chatId, `Placing ${betTypeStr} Bet`);
 
@@ -1579,7 +1697,7 @@ Last update: ${getMyanmarTime()}`;
                     this.startIssueChecker(userId);
                 }
 
-                const betText = `Bet Placed Successfully!\n\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K`;
+                const betText = `Bet Placed Successfully!\n\nPlatform: ${platformName}\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K`;
 
                 await this.bot.editMessageText(betText, {
                     chat_id: chatId,
@@ -1625,6 +1743,8 @@ Last update: ${getMyanmarTime()}`;
             const amount = await this.getCurrentBetAmount(userId);
             const betType = COLOUR_BET_TYPES[colour];
             const gameType = userSession.gameType || 'WINGO';
+            const platform = userSession.platform || '777';
+            const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
 
             const balance = await userSession.apiInstance.getBalance();
             if (balance < amount) {
@@ -1646,8 +1766,6 @@ Last update: ${getMyanmarTime()}`;
                 payoutInfo = "Win 2x on 0,5";
             }
 
-            const platformName = '777 Big Win';
-
             const loadingMsg = await this.bot.sendMessage(chatId, `Placing ${colour} Bet`);
 
             const result = await userSession.apiInstance.placeBet(amount, betType);
@@ -1660,7 +1778,7 @@ Last update: ${getMyanmarTime()}`;
                     this.startIssueChecker(userId);
                 }
 
-                const betText = `Colour Bet Placed Successfully!\n\n• Issue: ${result.issueId}\n• Type: ${colour}\n• Amount: ${amount.toLocaleString()} K`;
+                const betText = `Colour Bet Placed Successfully!\n\nPlatform: ${platformName}\n• Issue: ${result.issueId}\n• Type: ${colour}\n• Amount: ${amount.toLocaleString()} K`;
 
                 await this.bot.editMessageText(betText, {
                     chat_id: chatId,
@@ -1989,6 +2107,8 @@ Last update: ${getMyanmarTime()}`;
 
             const chatId = userId;
             const gameType = userSession.gameType || 'WINGO';
+            const platform = userSession.platform || '777';
+            const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
 
             let message = "";
             
@@ -2151,7 +2271,10 @@ Last update: ${getMyanmarTime()}`;
                     modeText = "Random Bot";
             }
 
-            const startMessage = `Auto Bot Started!`;
+            const platform = userSession.platform || '777';
+            const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
+            
+            const startMessage = `Auto Bot Started!\n\nPlatform: ${platformName}\nGame Type: ${userSession.gameType || 'WINGO'}\nMode: ${modeText}`;
             await this.bot.sendMessage(chatId, startMessage);
 
             this.startAutoBetting(userId);
@@ -2169,7 +2292,7 @@ Last update: ${getMyanmarTime()}`;
             return;
         }
 
-        let lastIssue = "";
+        let lastIssue = '';
         let consecutiveFailures = 0;
         const maxFailures = 3;
 
@@ -2266,7 +2389,7 @@ Last update: ${getMyanmarTime()}`;
         
         let betType, betTypeStr;
 
-        console.log(`Auto betting for user ${userId}, mode: ${randomMode}, game: ${userSession.gameType}`);
+        console.log(`Auto betting for user ${userId}, platform: ${userSession.platform}, mode: ${randomMode}, game: ${userSession.gameType}`);
 
         try {
             switch(randomMode) {
@@ -2350,7 +2473,10 @@ Last update: ${getMyanmarTime()}`;
             const amounts = betSequence.split(',').map(x => parseInt(x.trim()));
             const totalSteps = amounts.length;
             
-            const betMessage = `Placing Auto Bet\n\nIssue: ${issue}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K\nStep: ${currentIndex + 1}/${totalSteps}`;
+            const platform = userSession.platform || '777';
+            const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
+            
+            const betMessage = `Placing Auto Bet\n\nPlatform: ${platformName}\nIssue: ${issue}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K\nStep: ${currentIndex + 1}/${totalSteps}`;
             await this.bot.sendMessage(userId, betMessage);
 
             console.log(`Placing bet for user ${userId}: ${betTypeStr} ${amount}K on ${issue} (Step ${currentIndex + 1}/${totalSteps})`);
@@ -2365,7 +2491,7 @@ Last update: ${getMyanmarTime()}`;
                     this.startIssueChecker(userId);
                 }
 
-                const successMessage = `Bet Placed Successfully!\n\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K`;
+                const successMessage = `Bet Placed Successfully!\n\nPlatform: ${platformName}\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K`;
                 await this.bot.sendMessage(userId, successMessage);
                 
             } else {
@@ -2722,6 +2848,8 @@ Last update: ${getMyanmarTime()}`;
             const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
             const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
             const gameType = userSession.gameType || 'WINGO';
+            const platform = userSession.platform || '777';
+            const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
 
             const botSession = await this.getBotSession(userId);
 
@@ -2780,10 +2908,14 @@ Last update: ${getMyanmarTime()}`;
 
             const settingsText = `Bot Settings
 
+Platform: ${platformName}
+Game Type: ${gameType}
+
 Current Settings:
 Betting Mode: ${modeText}
 Bet Sequence: ${formattedSequence}
 Current Step: ${currentIndex + 1}/${amounts.length}
+Current Bet: ${currentAmount.toLocaleString()} K
 Bot Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}${formulaStatus}
 
 Profit/Loss Targets:
@@ -2819,7 +2951,7 @@ Choose your betting mode:`;
             return;
         }
 
-        const platformName = '777 Big Win';
+        const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
         const gameType = userSession.gameType || 'WINGO';
 
         let betsText = `Your Recent Bets - ${platformName} (${gameType})\n\n`;
@@ -2832,7 +2964,6 @@ Choose your betting mode:`;
             let resultText = "";
             
             if (bet.result === "WIN") {
-                // Win ရင် bet amount + win amount ပေါင်းပြမယ်
                 const totalWin = bet.amount + bet.profit_loss;
                 resultText = `WIN (+${totalWin.toLocaleString()}K)`;
                 winCount++;
@@ -2846,10 +2977,6 @@ Choose your betting mode:`;
             const timeStr = bet.created_at.split(' ')[1]?.substring(0, 5) || bet.created_at.substring(11, 16);
             betsText += `${i+1}. ${bet.issue} - ${bet.bet_type} - ${bet.amount.toLocaleString()}K - ${resultText}\n`;
         });
-
-        // စုစုပေါင်း ရလဒ်ကို ထည့်ရေး
-        const totalAmount = winCount + loseCount;
-        const winRate = totalAmount > 0 ? Math.round((winCount / totalAmount) * 100) : 0;
 
         await this.bot.sendMessage(chatId, betsText);
     } catch (error) {
@@ -2872,8 +2999,8 @@ Choose your betting mode:`;
             const user_id_display = userInfo.userId || 'N/A';
             const phone = userSession.phone || 'Not logged in';
             const gameType = userSession.gameType || 'WINGO';
-            
-            const platformName = '777 Big Win';
+            const platform = userSession.platform || '777';
+            const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
             
             const botSession = await this.getBotSession(userId);
             const betSequence = await this.getUserSetting(userId, 'bet_sequence', '');
@@ -2904,7 +3031,7 @@ Choose your betting mode:`;
                 }[randomMode] || "Random Bot";
             }
 
-            const botInfoText = `BOT INFORMATION\n\nUser Info:\nUser ID: ${user_id_display}\nPhone: ${phone}\nPlatform: ${platformName}\nGame Type: ${gameType}\nBalance: ${balance.toLocaleString()} K\n\nBot Settings:\nBetting Mode: ${modeText}\nBet Sequence: ${betSequence}\nCurrent Bet: ${currentAmount.toLocaleString()} K (Step ${currentIndex + 1})\nBot Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}\n\nTargets:\nProfit Target: ${profitTarget > 0 ? profitTarget.toLocaleString() + ' K' : 'Disabled'}\nLoss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}\n\nLast Update: ${getMyanmarTime()}`;
+            const botInfoText = `BOT INFORMATION\n\nPlatform: ${platformName}\nUser Info:\nUser ID: ${user_id_display}\nPhone: ${phone}\nGame Type: ${gameType}\nBalance: ${balance.toLocaleString()} K\n\nBot Settings:\nBetting Mode: ${modeText}\nBet Sequence: ${betSequence}\nCurrent Bet: ${currentAmount.toLocaleString()} K (Step ${currentIndex + 1})\nBot Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}\n\nTargets:\nProfit Target: ${profitTarget > 0 ? profitTarget.toLocaleString() + ' K' : 'Disabled'}\nLoss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}\n\nLast Update: ${getMyanmarTime()}`;
 
             await this.bot.sendMessage(chatId, botInfoText);
             
@@ -2919,7 +3046,7 @@ Choose your betting mode:`;
             const patternsData = await this.getFormulaPatterns(userId);
             const bsPattern = patternsData.bs_pattern || "Not set";
             
-            const message = `Choose an option:`;
+            const message = `BS Formula Settings\n\nCurrent Pattern: ${bsPattern}\n\nChoose an option:`;
             
             await this.bot.sendMessage(chatId, message, {
                 reply_markup: this.getBsPatternKeyboard()
@@ -2935,7 +3062,7 @@ Choose your betting mode:`;
             const patternsData = await this.getFormulaPatterns(userId);
             const colourPattern = patternsData.colour_pattern || "Not set";
             
-            const message = `Choose an option:`;
+            const message = `Colour Formula Settings\n\nCurrent Pattern: ${colourPattern}\n\nChoose an option:`;
             
             await this.bot.sendMessage(chatId, message, {
                 reply_markup: this.getColourPatternKeyboard()
@@ -3026,6 +3153,8 @@ Choose your betting mode:`;
         try {
             const userSession = this.ensureUserSession(userId);
             const gameType = userSession.gameType || 'WINGO';
+            const platform = userSession.platform || '777';
+            const platformName = platform === '777' ? '777 Big Win' : 'CK Platform';
             
             const betSequence = text.trim();
             const amounts = betSequence.split(',').map(x => {
@@ -3075,7 +3204,7 @@ Choose your betting mode:`;
             
             const currentAmount = amounts[0];
             
-            const successMessage = `Bet Sequence Updated!\n\nNew Sequence: ${betSequence}\nCurrent Bet: ${currentAmount.toLocaleString()} K (Step 1)${validationMessage}\n\nBot will now use this sequence for auto betting.`;
+            const successMessage = `Bet Sequence Updated!\n\nPlatform: ${platformName}\nGame Type: ${gameType}\nNew Sequence: ${betSequence}\nCurrent Bet: ${currentAmount.toLocaleString()} K (Step 1)${validationMessage}\n\nBot will now use this sequence for auto betting.`;
             
             await this.bot.sendMessage(chatId, successMessage, {
                 reply_markup: this.getBotSettingsKeyboard()
@@ -3588,8 +3717,8 @@ console.log("TRX 10 MIN Support: ENABLED (TypeId: 16)");
 console.log("WINGO 30S Support: ENABLED");
 console.log("WINGO 3 MIN Support: ENABLED");
 console.log("WINGO 5 MIN Support: ENABLED");
+console.log("Platform Support: 777 Big Win, CK Platform");
 console.log("Win/Loss Messages: ENABLED");
-console.log("Supported Platforms: 777 Big Win (WINGO & TRX)");
 console.log("Myanmar Time System: ENABLED");
 console.log("Press Ctrl+C to stop.");
 
