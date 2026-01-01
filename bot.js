@@ -216,143 +216,50 @@ class LotteryAPI {
     }
 
     async login(phone, password) {
-    try {
-        let formattedPhone = phone;
+        try {
+            let formattedPhone = phone;
 
-        // 6 Lottery အတွက် login format
-        if (!phone.startsWith('95')) {
-            formattedPhone = '95' + phone;
-        }
-
-        formattedPhone = formattedPhone.replace(/\D/g, '');
-
-        // 6 Lottery ရဲ့အတိအကျလိုအပ်တဲ့ format အတိုင်း
-        const timestamp = Math.floor(Date.now() / 1000);
-        const randomStr = this.generateRandomString();
-        const deviceId = this.generateDeviceId();
-        
-        const body = {
-            "username": formattedPhone,
-            "pwd": password,
-            "phonetype": 2,  // သင့်ပုံစံအတိုင်း 2 ထားပါ
-            "logintype": "mobile",
-            "packId": "",  // သင့်ပုံစံအတိုင်း empty string
-            "deviceId": deviceId,  // သင့်ပုံစံအတိုင်း deviceId ထည့်ပါ
-            "language": 7,  // သင့်ပုံစံအတိုင်း 7 ထားပါ
-            "random": randomStr,
-            "timestamp": timestamp
-        };
-
-        // MD5 signature ကို တွက်ချက်ပါ
-        body.signature = this.signMd5(body);
-
-        console.log('6 LOTTERY LOGIN REQUEST (FIXED):', JSON.stringify(body, null, 2));
-
-        const response = await axios.post(`${this.baseUrl}Login`, body, {
-            headers: this.headers,
-            timeout: 30000
-        });
-
-        console.log('6 LOTTERY LOGIN RESPONSE (FIXED):', JSON.stringify(response.data, null, 2));
-
-        if (response.status === 200) {
-            const result = response.data;
-            
-            // Success condition ကိုစစ်ဆေးပါ
-            if (result.code === 0 || result.msgCode === 0 || result.success === true) {
-                // Token ရှာပါ
-                let token = '';
-                
-                if (result.data && result.data.token) {
-                    token = result.data.token;
-                } else if (result.token) {
-                    token = result.token;
-                } else if (result.data && result.data.tokenHeader && result.data.token) {
-                    token = result.data.tokenHeader + result.data.token;
-                }
-                
-                if (token) {
-                    this.token = token;
-                    this.headers.Authorization = token;
-                    console.log('6 LOTTERY LOGIN SUCCESS WITH FIXED FORMAT');
-                    
-                    return { 
-                        success: true, 
-                        message: "6 Lottery Login successful", 
-                        token: token 
-                    };
-                }
+            // 6 Lottery အတွက် login format
+            if (!phone.startsWith('95')) {
+                formattedPhone = '95' + phone;
             }
-            
-            // Login မအောင်တဲ့အခါ error message ထုတ်ပါ
-            const errorMsg = result.msg || result.message || "Login failed";
-            return { 
-                success: false, 
-                message: `6 Lottery Login failed: ${errorMsg}`, 
-                token: "" 
+
+            formattedPhone = formattedPhone.replace(/\D/g, '');
+
+            const body = {
+                "phonetype": -2,
+                "language": 0,
+                "logintype": "mobile",
+                "random": "9078efc98754430e92e51da59eb2563c",
+                "username": formattedPhone,
+                "pwd": password,
+                "timestamp": Math.floor(Date.now() / 1000)
             };
-        }
-        
-        return { 
-            success: false, 
-            message: `HTTP Error: ${response.status}`, 
-            token: "" 
-        };
-        
-    } catch (error) {
-        console.error('6 LOTTERY FIXED LOGIN ERROR:', error.message);
-        
-        // Network error တွေအတွက်
-        if (error.code === 'ECONNREFUSED') {
-            return { 
-                success: false, 
-                message: "Cannot connect to 6 Lottery server. Please check your internet connection.", 
-                token: "" 
-            };
-        }
-        
-        if (error.response) {
-            console.error('Error response data:', error.response.data);
-            console.error('Error response status:', error.response.status);
-            
-            if (error.response.data) {
-                const errorMsg = error.response.data.msg || error.response.data.message || 
-                               JSON.stringify(error.response.data);
-                return { 
-                    success: false, 
-                    message: `6 Lottery Login error: ${errorMsg}`, 
-                    token: "" 
-                };
+
+            body.signature = this.signMd5(body);
+
+            const response = await axios.post(`${this.baseUrl}Login`, body, {
+                headers: this.headers,
+                timeout: 30000
+            });
+
+            if (response.status === 200) {
+                const result = response.data;
+                if (result.msgCode === 0 || result.code === 0 || result.success === true) {
+                    const tokenData = result.data || {};
+                    this.token = `${tokenData.tokenHeader || ''}${tokenData.token || ''}`;
+                    this.headers.Authorization = this.token;
+                    return { success: true, message: "6 Lottery Login successful", token: this.token };
+                } else {
+                    return { success: false, message: result.msg || "6 Lottery Login failed", token: "" };
+                }
+            } else {
+                return { success: false, message: `6 Lottery API connection failed: ${response.status}`, token: "" };
             }
+        } catch (error) {
+            return { success: false, message: `6 Lottery Login error: ${error.message}`, token: "" };
         }
-        
-        return { 
-            success: false, 
-            message: `Login error: ${error.message}`, 
-            token: "" 
-        };
     }
-}
-
-// Random string generate လုပ်ဖို့ function ထပ်ထည့်ပါ
-generateRandomString() {
-    const chars = '0123456789abcdef';
-    let result = '';
-    for (let i = 0; i < 32; i++) {
-        result += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return result;
-}
-
-// Device ID generate လုပ်ဖို့ function
-generateDeviceId() {
-    const chars = '0123456789abcdef';
-    let result = '';
-    for (let i = 0; i < 32; i++) {
-        result += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return result;
-}
 
     async getUserInfo() {
         try {
