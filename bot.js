@@ -217,24 +217,44 @@ class LotteryAPI {
 
     async login(phone, password) {
     try {
-        // Simple phone formatting for 6 Lottery
-        let formattedPhone = phone.toString().replace(/\D/g, '');
+        console.log(`6 Lottery Login attempt - Phone: ${phone}, Password: ${password.length} chars`);
         
-        // If starts with 09, convert to 959
-        if (formattedPhone.startsWith('09')) {
-            formattedPhone = '959' + formattedPhone.substring(2);
-        }
-        // If starts with 9 (9 digits), add 95
+        // Phone number formatting
+        let formattedPhone = phone.toString().trim();
+        
+        // Remove any spaces or dashes
+        formattedPhone = formattedPhone.replace(/[\s\-]/g, '');
+        
+        // Check if it's a Myanmar phone number
+        if (formattedPhone.startsWith('09') && formattedPhone.length === 11) {
+            // 09xxxxxxxxx -> 95xxxxxxxxx
+            formattedPhone = '95' + formattedPhone.substring(2);
+        } 
         else if (formattedPhone.startsWith('9') && formattedPhone.length === 9) {
+            // 9xxxxxxxx -> 959xxxxxxxx
             formattedPhone = '95' + formattedPhone;
         }
-        // Ensure starts with 95
         else if (!formattedPhone.startsWith('95')) {
+            // Add 95 prefix if not present
             formattedPhone = '95' + formattedPhone;
         }
         
-        console.log(`6 Lottery Login - Formatted phone: ${formattedPhone}`);
+        // Remove any non-digit characters
+        formattedPhone = formattedPhone.replace(/\D/g, '');
         
+        // Final validation
+        if (formattedPhone.length < 10 || formattedPhone.length > 13) {
+            console.error(`Invalid phone number length: ${formattedPhone}`);
+            return { 
+                success: false, 
+                message: "Invalid phone number. Please use Myanmar phone number (09XXXXXXXXX)", 
+                token: "" 
+            };
+        }
+        
+        console.log(`Formatted phone for 6 Lottery: ${formattedPhone}`);
+        
+        // Login request body
         const body = {
             "phonetype": -1,
             "language": 0,
@@ -245,38 +265,112 @@ class LotteryAPI {
             "timestamp": Math.floor(Date.now() / 1000)
         };
         
+        // Generate signature
         body.signature = this.signMd5(body);
         
-        const response = await axios.post("https://6lotteryapi.com/api/webapi/Login", body, {
-            headers: {
-                "Accept": "application/json, text/plain, */*",
-                "Content-Type": "application/json;charset=UTF-8",
-                "Origin": "https://6lotteryapi.com",
-                "Referer": "https://6lotteryapi.com/",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            },
-            timeout: 10000
+        console.log('6 Lottery Login request body:', JSON.stringify(body));
+        
+        // Make API request
+        const response = await axios.post(`${this.baseUrl}Login`, body, {
+            headers: this.headers,
+            timeout: 30000
         });
         
-        if (response.data?.code === 0) {
-            this.token = response.data.data?.token || "";
-            if (this.token) {
-                return { success: true, message: "Login successful", token: this.token };
+        console.log('6 Lottery Login response status:', response.status);
+        console.log('6 Lottery Login response data:', JSON.stringify(response.data));
+        
+        if (response.status === 200) {
+            const result = response.data;
+            
+            // Check different success conditions
+            if (result.msgCode === 0 || result.code === 0 || result.success === true) {
+                const tokenData = result.data || {};
+                this.token = `${tokenData.tokenHeader || ''}${tokenData.token || ''}`;
+                
+                if (this.token) {
+                    this.headers.Authorization = this.token;
+                    console.log('6 Lottery Login successful, token obtained');
+                    return { 
+                        success: true, 
+                        message: "6 Lottery Login successful", 
+                        token: this.token 
+                    };
+                } else {
+                    console.log('6 Lottery Login successful but no token received');
+                    return { 
+                        success: false, 
+                        message: "Login successful but no token received", 
+                        token: "" 
+                    };
+                }
+            } else {
+                const errorMsg = result.msg || result.message || "6 Lottery Login failed";
+                console.log('6 Lottery Login API error:', errorMsg);
+                
+                // Specific error messages
+                if (errorMsg.includes('密码') || errorMsg.includes('密码错误')) {
+                    return { 
+                        success: false, 
+                        message: "Incorrect password", 
+                        token: "" 
+                    };
+                } else if (errorMsg.includes('用户') || errorMsg.includes('不存在')) {
+                    return { 
+                        success: false, 
+                        message: "User not found", 
+                        token: "" 
+                    };
+                } else if (errorMsg.includes('锁定') || errorMsg.includes('冻结')) {
+                    return { 
+                        success: false, 
+                        message: "Account is locked or frozen", 
+                        token: "" 
+                    };
+                }
+                
+                return { 
+                    success: false, 
+                    message: errorMsg, 
+                    token: "" 
+                };
             }
+        } else {
+            console.log('6 Lottery HTTP error:', response.status, response.statusText);
+            return { 
+                success: false, 
+                message: `6 Lottery API connection failed: ${response.status}`, 
+                token: "" 
+            };
         }
-        
-        return { 
-            success: false, 
-            message: response.data?.msg || "Login failed", 
-            token: "" 
-        };
-        
     } catch (error) {
-        return { 
-            success: false, 
-            message: error.response?.data?.msg || error.message, 
-            token: "" 
-        };
+        console.error('6 Lottery Login catch error:', error.message);
+        
+        if (error.code === 'ECONNREFUSED') {
+            return { 
+                success: false, 
+                message: "Cannot connect to 6 Lottery server", 
+                token: "" 
+            };
+        } else if (error.code === 'ETIMEDOUT') {
+            return { 
+                success: false, 
+                message: "Connection timeout to 6 Lottery server", 
+                token: "" 
+            };
+        } else if (error.response) {
+            console.error('6 Lottery Error response:', error.response.data);
+            return { 
+                success: false, 
+                message: `6 Lottery server error: ${error.response.status}`, 
+                token: "" 
+            };
+        } else {
+            return { 
+                success: false, 
+                message: `6 Lottery Login error: ${error.message}`, 
+                token: "" 
+            };
+        }
     }
 }
 
@@ -1584,7 +1678,8 @@ Note: Phone number will be automatically formatted with country code 95`;
         });
     }
 
-    async processLogin(chatId, userId) {
+    // processLogin function ထဲမှာ debug information ထည့်ပါ
+async processLogin(chatId, userId) {
     const userSession = this.ensureUserSession(userId);
 
     if (!userSession.phone || !userSession.password) {
@@ -1594,7 +1689,15 @@ Note: Phone number will be automatically formatted with country code 95`;
         return;
     }
 
-    const loadingMsg = await this.bot.sendMessage(chatId, `Logging into 6 Lottery... Please wait.`);
+    // Debug info
+    console.log(`User ${userId} login attempt:`);
+    console.log(`- Phone: ${userSession.phone}`);
+    console.log(`- Password length: ${userSession.password.length}`);
+    console.log(`- Platform: ${userSession.platform}`);
+    console.log(`- Game Type: ${userSession.gameType}`);
+
+    const loadingMsg = await this.bot.sendMessage(chatId, `Logging into 6 Lottery...\n\nPhone: ${userSession.phone}\nPlease wait.`);
+
 
     try {
         const result = await userSession.apiInstance.login(userSession.phone, userSession.password);
