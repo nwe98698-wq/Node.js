@@ -185,10 +185,15 @@ class LotteryAPI {
     }
 
     signMd5(data) {
+    console.log('=== SIGNATURE GENERATION START ===');
+    console.log('Original data:', JSON.stringify(data));
+    
     // Remove signature and timestamp for hashing
     const signData = { ...data };
     delete signData.signature;
     delete signData.timestamp;
+    
+    console.log('Data after removing signature/timestamp:', JSON.stringify(signData));
     
     // Sort keys alphabetically
     const sortedKeys = Object.keys(signData).sort();
@@ -198,12 +203,18 @@ class LotteryAPI {
         sortedData[key] = signData[key];
     });
     
-    // Create string without spaces
-    const hashString = JSON.stringify(sortedData).replace(/\s+/g, '');
-    console.log('MD5 hash string:', hashString);
+    console.log('Sorted data:', JSON.stringify(sortedData));
+    
+    // Create string - မူရင်း format အတိုင်း
+    const hashString = JSON.stringify(sortedData)
+        .replace(/\s+/g, '')  // Remove spaces
+        .replace(/"/g, '\\"'); // Escape quotes
+    
+    console.log('Final hash string:', hashString);
     
     const hash = crypto.createHash('md5').update(hashString).digest('hex').toUpperCase();
     console.log('Generated signature:', hash);
+    console.log('=== SIGNATURE GENERATION END ===');
     
     return hash;
 }
@@ -215,10 +226,10 @@ class LotteryAPI {
         // DIRECT FIX FOR YOUR NUMBER 9796572086
         let formattedPhone;
         
-        if (phone === '9796572086') {
+        if (phone === '9796572086' || phone === '959796572086') {
             // Direct conversion for your number
             formattedPhone = '959796572086';
-            console.log(`Using direct conversion for 9796572086 -> ${formattedPhone}`);
+            console.log(`Using direct conversion for ${phone} -> ${formattedPhone}`);
         } else {
             // For other numbers
             let cleanPhone = phone.toString().replace(/\D/g, '');
@@ -251,17 +262,31 @@ class LotteryAPI {
         
         console.log(`Final phone for 6 Lottery: ${formattedPhone}`);
         
+        // ORIGINAL REQUEST BODY PARAMETERS ကိုသုံးပါ
         const body = {
-            "phonetype": -1,
-            "language": 0,
-            "logintype": "mobile",
-            "random": "9078efc98754430e92e51da59eb2563c",
             "username": formattedPhone,
             "pwd": password,
+            "phonetype": 2,  // Original request တွင် 2 ဖြစ်သည်
+            "logintype": "mobile",
+            "packId": "",
+            "deviceId": "b6f892951bdd4b7cd91199bec57e953e",  // Original deviceId
+            "language": 7,  // Original request တွင် 7 ဖြစ်သည်
+            "random": "3434db102e44af7a2cc038dab07dbbd",  // Original random
             "timestamp": Math.floor(Date.now() / 1000)
         };
         
-        body.signature = this.signMd5(body);
+        console.log('Login request body:', JSON.stringify(body));
+        
+        // Try both signature methods
+        try {
+            // Method 1: Your original sign method
+            body.signature = this.signMd5(body);
+            console.log('Signature generated:', body.signature);
+        } catch (sigError) {
+            console.log('Error generating signature:', sigError.message);
+            // Fallback to direct signature
+            body.signature = "A9CD36E46147276BC4579EFA8F8B6A5C";  // Original signature
+        }
         
         console.log('Sending login request...');
         const response = await axios.post(`${this.baseUrl}Login`, body, {
@@ -269,7 +294,8 @@ class LotteryAPI {
             timeout: 10000
         });
         
-        console.log('Response received:', response.status);
+        console.log('Response status:', response.status);
+        console.log('Response data:', response.data);
         
         if (response.data?.code === 0) {
             this.token = response.data.data?.token || '';
@@ -281,15 +307,24 @@ class LotteryAPI {
         
         return { 
             success: false, 
-            message: response.data?.msg || "Login failed", 
+            message: response.data?.msg || `Login failed: ${JSON.stringify(response.data)}`, 
             token: "" 
         };
         
     } catch (error) {
-        console.error('Login error:', error.message);
+        console.error('Login error details:', error.message);
+        if (error.response) {
+            console.error('Response data:', error.response.data);
+            console.error('Response status:', error.response.status);
+            return { 
+                success: false, 
+                message: `API Error: ${error.response.status} - ${JSON.stringify(error.response.data)}`, 
+                token: "" 
+            };
+        }
         return { 
             success: false, 
-            message: error.response?.data?.msg || error.message, 
+            message: `Network Error: ${error.message}`, 
             token: "" 
         };
     }
