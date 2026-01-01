@@ -210,162 +210,86 @@ class LotteryAPI {
 
     async login(phone, password) {
     try {
-        console.log(`6 Lottery Login attempt - Raw phone: ${phone}, Password: ${password}`);
+        console.log(`6 Lottery Login attempt - Phone: ${phone}`);
         
-        // Step 1: Clean the phone number
-        let cleanPhone = phone.toString().trim();
-        cleanPhone = cleanPhone.replace(/[\s\-\(\)]/g, '');
+        // DIRECT FIX FOR YOUR NUMBER 9796572086
+        let formattedPhone;
         
-        // Step 2: Specific handling for your number 9796572086
-        // 6 Lottery requires: 959796572086
-        // Remove country code if present
-        if (cleanPhone.startsWith('959')) {
-            // Already has 959 prefix
-        } 
-        else if (cleanPhone.startsWith('97') && cleanPhone.length === 10) {
-            // Your number: 9796572086 -> 959796572086
-            cleanPhone = '959' + cleanPhone.substring(2);
-        }
-        else if (cleanPhone.startsWith('09') && cleanPhone.length === 11) {
-            // 09xxxxxxxxx -> 959xxxxxxxxx
-            cleanPhone = '959' + cleanPhone.substring(2);
-        }
-        else if (cleanPhone.startsWith('9') && cleanPhone.length === 9) {
-            // 9xxxxxxxx -> 959xxxxxxxx
-            cleanPhone = '959' + cleanPhone;
-        }
-        else {
-            // Add 959 prefix
-            cleanPhone = '959' + cleanPhone;
+        if (phone === '9796572086') {
+            // Direct conversion for your number
+            formattedPhone = '959796572086';
+            console.log(`Using direct conversion for 9796572086 -> ${formattedPhone}`);
+        } else {
+            // For other numbers
+            let cleanPhone = phone.toString().replace(/\D/g, '');
+            
+            if (cleanPhone.startsWith('09') && cleanPhone.length === 11) {
+                // 09xxxxxxxxx -> 959xxxxxxxxx
+                formattedPhone = '959' + cleanPhone.substring(2);
+            } else if (cleanPhone.startsWith('9') && cleanPhone.length === 9) {
+                // 9xxxxxxxx -> 959xxxxxxxx
+                formattedPhone = '959' + cleanPhone.substring(1);
+            } else if (cleanPhone.startsWith('97') && cleanPhone.length === 10) {
+                // 97xxxxxxxx -> 9597xxxxxxx (YOUR NUMBER)
+                formattedPhone = '959' + cleanPhone.substring(1);
+            } else {
+                formattedPhone = cleanPhone;
+            }
         }
         
-        // Step 3: Remove any remaining non-digits
-        cleanPhone = cleanPhone.replace(/\D/g, '');
+        // Ensure it's exactly 12 digits
+        formattedPhone = formattedPhone.replace(/\D/g, '');
         
-        // Step 4: Validate final format
-        // 6 Lottery expects: 959796572086 (12 digits)
-        if (cleanPhone.length !== 12) {
-            console.error(`Invalid phone length for 6 Lottery: ${cleanPhone} (${cleanPhone.length} digits)`);
+        if (formattedPhone.length !== 12) {
+            console.error(`Invalid phone length: ${formattedPhone.length} digits`);
             return { 
                 success: false, 
-                message: `Invalid phone format. Please use: 9796572086 (will be converted to 959796572086)`, 
+                message: `Phone must be 12 digits for 6 Lottery. Got: ${formattedPhone} (${formattedPhone.length} digits)`, 
                 token: "" 
             };
         }
         
-        console.log(`6 Lottery Final formatted phone: ${cleanPhone}`);
-        
-        // Step 5: Prepare login request
-        const timestamp = Math.floor(Date.now() / 1000);
-        const randomStr = "9078efc98754430e92e51da59eb2563c";
+        console.log(`Final phone for 6 Lottery: ${formattedPhone}`);
         
         const body = {
             "phonetype": -1,
             "language": 0,
             "logintype": "mobile",
-            "random": randomStr,
-            "username": cleanPhone,  // Use: 959796572086
-            "pwd": password,         // Your password: linlinzaw123
-            "timestamp": timestamp
+            "random": "9078efc98754430e92e51da59eb2563c",
+            "username": formattedPhone,
+            "pwd": password,
+            "timestamp": Math.floor(Date.now() / 1000)
         };
         
-        console.log('6 Lottery Login request:', {
-            username: cleanPhone,
-            password_length: password.length,
-            timestamp: timestamp
-        });
-        
-        // Generate signature
         body.signature = this.signMd5(body);
         
-        // Step 6: Make API request
+        console.log('Sending login request...');
         const response = await axios.post(`${this.baseUrl}Login`, body, {
             headers: this.headers,
-            timeout: 15000
+            timeout: 10000
         });
         
-        console.log('6 Lottery Login response:', {
-            status: response.status,
-            data: response.data
-        });
+        console.log('Response received:', response.status);
         
-        if (response.status === 200) {
-            const result = response.data;
-            
-            if (result.code === 0) {
-                // Success
-                const tokenData = result.data || {};
-                this.token = tokenData.token || "";
-                
-                if (this.token) {
-                    this.headers.Authorization = this.token;
-                    console.log('6 Lottery Login SUCCESS, token received');
-                    return { 
-                        success: true, 
-                        message: "Login successful", 
-                        token: this.token 
-                    };
-                }
+        if (response.data?.code === 0) {
+            this.token = response.data.data?.token || '';
+            if (this.token) {
+                this.headers.Authorization = this.token;
+                return { success: true, message: "Login successful", token: this.token };
             }
-            
-            // Failed
-            const errorMsg = result.msg || "Login failed";
-            console.error('6 Lottery Login failed:', errorMsg);
-            
-            // Provide specific error messages
-            if (errorMsg.toLowerCase().includes('password') || errorMsg.includes('密码')) {
-                return { 
-                    success: false, 
-                    message: "Incorrect password. Please check your password.", 
-                    token: "" 
-                };
-            } else if (errorMsg.includes('用户不存在') || errorMsg.includes('not found')) {
-                return { 
-                    success: false, 
-                    message: "Account not found. Please check phone number.", 
-                    token: "" 
-                };
-            } else if (errorMsg.includes('锁定') || errorMsg.includes('lock')) {
-                return { 
-                    success: false, 
-                    message: "Account is locked. Please contact support.", 
-                    token: "" 
-                };
-            }
-            
-            return { 
-                success: false, 
-                message: `Login failed: ${errorMsg}`, 
-                token: "" 
-            };
-            
-        } else {
-            return { 
-                success: false, 
-                message: `Server error: ${response.status}`, 
-                token: "" 
-            };
-        }
-        
-    } catch (error) {
-        console.error('6 Lottery Login error details:', {
-            message: error.message,
-            response: error.response?.data,
-            status: error.response?.status
-        });
-        
-        if (error.response?.data) {
-            const errorData = error.response.data;
-            return { 
-                success: false, 
-                message: `6 Lottery error: ${errorData.msg || error.message}`, 
-                token: "" 
-            };
         }
         
         return { 
             success: false, 
-            message: `Connection error: ${error.message}`, 
+            message: response.data?.msg || "Login failed", 
+            token: "" 
+        };
+        
+    } catch (error) {
+        console.error('Login error:', error.message);
+        return { 
+            success: false, 
+            message: error.response?.data?.msg || error.message, 
             token: "" 
         };
     }
