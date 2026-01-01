@@ -180,8 +180,8 @@ class LotteryAPI {
         return "https://www.6win566.com";
     }
 
-    getReferer() {
-        return "https://www.6win566.com/";
+        getReferer() {
+            return "https://www.6win566.com/";
     }
 
     signMd5(data) {
@@ -214,8 +214,7 @@ class LotteryAPI {
         }
         return result;
     }
-
-    // index2.js ထဲမှာ Login function ကိုပြင်ဆင်ပါ
+// index2.js ထဲမှာ Login function ကိုပြင်ဆင်ပါ
 async login(phone, password) {
     try {
         let formattedPhone = phone;
@@ -958,7 +957,7 @@ class AutoLotteryBot {
                     [{ text: "Balance" }, { text: "Results" }],
                     [{ text: "Bet BIG" }, { text: "Bet SMALL" }],
                     [{ text: "Bot Settings" }, { text: "My Bets" }],
-                    [{ text: "Bot Info" }, { text: "Platform/Game" }],
+                    [{ text: "Bot Info" }, { text: "Game Type" }],
                     [{ text: "Run Bot" }, { text: "Stop Bot" }]
                 ],
                 resize_keyboard: true
@@ -971,7 +970,7 @@ class AutoLotteryBot {
                     [{ text: "Bet BIG" }, { text: "Bet SMALL" }],
                     [{ text: "Bet RED" }, { text: "Bet GREEN" }, { text: "Bet VIOLET" }],
                     [{ text: "Bot Settings" }, { text: "My Bets" }],
-                    [{ text: "Bot Info" }, { text: "Platform/Game" }],
+                    [{ text: "Bot Info" }, { text: "Game Type" }],
                     [{ text: "Run Bot" }, { text: "Stop Bot" }]
                 ],
                 resize_keyboard: true
@@ -1003,25 +1002,14 @@ class AutoLotteryBot {
         };
     }
 
-    getPlatformKeyboard() {
-        return {
-            keyboard: [
-                [{ text: "6 Lottery" }, { text: "Back" }]
-            ],
-            resize_keyboard: true
-        };
-    }
-
     getGameTypeKeyboard() {
         return {
             keyboard: [
-                [{ text: "WINGO" }, { text: "TRX" }],
+                [{ text: "WINGO" }],
                 [{ text: "WINGO 30S" }],
                 [{ text: "WINGO 3 MIN" }],
                 [{ text: "WINGO 5 MIN" }],
-                [{ text: "TRX 3 MIN" }],
-                [{ text: "TRX 5 MIN" }],
-                [{ text: "TRX 10 MIN" }],
+                [{ text: "TRX" }],
                 [{ text: "Back" }]
             ],
             resize_keyboard: true
@@ -1268,7 +1256,6 @@ class AutoLotteryBot {
                 case "Balance":
                     await this.handleBalance(chatId, userId);
                     break;
-
                 case "Results":
                     await this.handleResults(chatId, userId);
                     break;
@@ -1301,7 +1288,7 @@ class AutoLotteryBot {
                     await this.showMyBets(chatId, userId);
                     break;
 
-                case "Platform/Game":
+                case "Game Type":
                     await this.showPlatformMenu(chatId, userId);
                     break;
 
@@ -1465,22 +1452,17 @@ class AutoLotteryBot {
             gameTypeInfo = "\n\nWINGO: Supports Bot BIG/SMALL and Colour betting";
         }
 
-        const platformText = `6 Lottery Platform Settings
-
-Current Platform: 6 LOTTERY
-Current Game: ${currentGameType}
-${gameTypeInfo}
-
-Select Game Type:`;
+        const platformText = `6 Lottery Select Game Type`;
 
         await this.bot.sendMessage(chatId, platformText, {
             reply_markup: {
                 keyboard: [
-                    [{ text: "6 Lottery" }, { text: "Back" }],
-                    [{ text: "WINGO" }, { text: "TRX" }],
-                    [{ text: "WINGO 30S" }, { text: "WINGO 3 MIN" }],
-                    [{ text: "WINGO 5 MIN" }, { text: "TRX 3 MIN" }],
-                    [{ text: "TRX 5 MIN" }, { text: "TRX 10 MIN" }],
+                    
+                    [{ text: "WINGO" }],
+                    [{ text: "WINGO 30S" }],
+                    [{ text: "WINGO 3 MIN" }],
+                    [{ text: "WINGO 5 MIN" }],
+                    [{ text: "TRX" }],
                     [{ text: "Back" }]
                 ],
                 resize_keyboard: true
@@ -1576,9 +1558,7 @@ Please follow these steps:
 2. Click 'Enter Password' and send your password  
 3. Click 'Login Now' to authenticate
 
-Your credentials will be saved for future use!
-
-Note: Phone number will be automatically formatted with country code 95`;
+Your credentials will be saved for future use!`;
 
         await this.bot.sendMessage(chatId, loginGuide, {
             reply_markup: this.getLoginKeyboard()
@@ -1634,7 +1614,6 @@ Game ID: ${gameId}
 Account: ${userSession.phone}
 Balance: ${balance.toLocaleString()} K
 Game Type: ${gameType}
-Default Bet: 100 K
 
 Status: VERIFIED ✅`;
 
@@ -1929,7 +1908,7 @@ Last update: ${getMyanmarTime()}`;
                 }
             }
 
-            const stopMessage = `6 Lottery Bot Stopped!${balanceText}`;
+            const stopMessage = `6 Lottery Bot Stopped!`;
             console.log(`6 Lottery Sending stop message to user ${userId}`);
 
             await this.bot.sendMessage(chatId, stopMessage, {
@@ -2208,11 +2187,11 @@ Last update: ${getMyanmarTime()}`;
             let message = "";
 
             if (betResult === "WIN") {
-                message = `BET RESULT - WIN! \n\n`;
+                message = `🚀 BET RESULT - WIN! \n\n`;
                 
                 message += `🏆 TOTAL PROFIT: ${totalProfit.toLocaleString()} K\n\n`;
             } else {
-                message = `BET RESULT - LOSS \n\n`;
+                message = `🚀 BET RESULT - LOSS! \n\n`;
                 
                 message += `💔 TOTAL PROFIT: ${totalProfit.toLocaleString()} K\n\n`;
             }
@@ -2220,7 +2199,7 @@ Last update: ${getMyanmarTime()}`;
             if (userSession.loggedIn && userSession.apiInstance) {
                 try {
                     const currentBalance = await userSession.apiInstance.getBalance();
-                    message += `\nCurrent Balance: ${currentBalance.toLocaleString()} K`;
+                    message += ` `;
                     console.log(`6 Lottery Balance retrieved: ${currentBalance} for user ${userId}`);
                 } catch (balanceError) {
                     console.error(`6 Lottery Error getting balance for result message:`, balanceError);
@@ -2459,7 +2438,9 @@ Last update: ${getMyanmarTime()}`;
         bettingLoop();
     }
 
-    async placeAutoBet(userId, issue) {
+    // placeAutoBet function ကို အောက်ပါအတိုင်း ပြင်ဆင်ပါ
+
+async placeAutoBet(userId, issue) {
     const userSession = userSessions[userId];
     if (!userSession || !userSession.loggedIn) {
         console.log(`6 Lottery User ${userId} not logged in for auto bet`);
@@ -2540,74 +2521,79 @@ Last update: ${getMyanmarTime()}`;
             return;
         }
 
-            const botSession = await this.getBotSession(userId);
-            const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
-            const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
+        const botSession = await this.getBotSession(userId);
+        const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
+        const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
 
-            const netProfit = botSession.session_profit - botSession.session_loss;
+        const netProfit = botSession.session_profit - botSession.session_loss;
 
-            if (profitTarget > 0 && netProfit >= profitTarget) {
-                console.log(`6 Lottery Profit target reached for user ${userId}: ${netProfit} >= ${profitTarget}`);
-                this.bot.sendMessage(userId, `6 Lottery Profit Target Reached!\n\nCurrent Profit: ${netProfit.toLocaleString()} K\nTarget: ${profitTarget.toLocaleString()} K\n\nAuto bot stopped automatically.`).catch(console.error);
-                delete autoBettingTasks[userId];
-                waitingForResults[userId] = false;
-                await this.saveBotSession(userId, false);
-                return;
+        if (profitTarget > 0 && netProfit >= profitTarget) {
+            console.log(`6 Lottery Profit target reached for user ${userId}: ${netProfit} >= ${profitTarget}`);
+            this.bot.sendMessage(userId, `6 Lottery Profit Target Reached!\n\nCurrent Profit: ${netProfit.toLocaleString()} K\nTarget: ${profitTarget.toLocaleString()} K\n\nAuto bot stopped automatically.`).catch(console.error);
+            delete autoBettingTasks[userId];
+            waitingForResults[userId] = false;
+            await this.saveBotSession(userId, false);
+            return;
+        }
+
+        if (lossTarget > 0 && botSession.session_loss >= lossTarget) {
+            console.log(`6 Lottery Loss target reached for user ${userId}: ${botSession.session_loss} >= ${lossTarget}`);
+            this.bot.sendMessage(userId, `6 Lottery Loss Target Reached!\n\nCurrent Loss: ${botSession.session_loss.toLocaleString()} K\nTarget: ${lossTarget.toLocaleString()} K\n\nAuto bot stopped automatically.`).catch(console.error);
+            delete autoBettingTasks[userId];
+            waitingForResults[userId] = false;
+            await this.saveBotSession(userId, false);
+            return;
+        }
+
+        const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
+        const betSequence = await this.getUserSetting(userId, 'bet_sequence', '');
+        const amounts = betSequence.split(',').map(x => parseInt(x.trim()));
+        const totalSteps = amounts.length;
+
+        // 🔥 Bet မထိုးခင်အချိန်မှာ အောက်ပါအတိုင်း message format ဖြစ်အောင်ပြင်မယ်
+        const cleanBetTypeStr = betTypeStr
+            .replace(" (Colour Formula Converted)", "")
+            .replace(" (Follow)", "")
+            .replace(" (Random Fallback)", "")
+            .replace(/\(.*?\)/g, "")  // ကွင်းစကွင်းပတ်အားလုံးဖြုတ်မယ်
+            .trim();
+        
+        const betMessage = `💡 ${issue}\n🧠 ${cleanBetTypeStr}\n⚡ ${amount.toLocaleString()} K`;
+        await this.bot.sendMessage(userId, betMessage);
+
+        console.log(`6 Lottery Placing bet for user ${userId}: ${cleanBetTypeStr} ${amount}K on ${issue} (Step ${currentIndex + 1}/${totalSteps})`);
+        const result = await userSession.apiInstance.placeBet(amount, betType);
+
+        if (result.success) {
+            console.log(`6 Lottery Bet placed successfully for user ${userId}`);
+            await this.savePendingBet(userId, userSession.platform, result.issueId, cleanBetTypeStr, amount);
+
+            if (!issueCheckers[userId]) {
+                console.log(`6 Lottery Starting issue checker for user ${userId}`);
+                this.startIssueChecker(userId);
             }
 
-            if (lossTarget > 0 && botSession.session_loss >= lossTarget) {
-                console.log(`6 Lottery Loss target reached for user ${userId}: ${botSession.session_loss} >= ${lossTarget}`);
-                this.bot.sendMessage(userId, `6 Lottery Loss Target Reached!\n\nCurrent Loss: ${botSession.session_loss.toLocaleString()} K\nTarget: ${lossTarget.toLocaleString()} K\n\nAuto bot stopped automatically.`).catch(console.error);
-                delete autoBettingTasks[userId];
-                waitingForResults[userId] = false;
-                await this.saveBotSession(userId, false);
-                return;
-            }
+        } else {
+            console.log(`6 Lottery Bet failed for user ${userId}: ${result.message}`);
 
-            const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
-            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
-            const amounts = betSequence.split(',').map(x => parseInt(x.trim()));
-            const totalSteps = amounts.length;
+            if (result.message.includes('amount') || result.message.includes('betting')) {
+                console.log(`6 Lottery Amount error detected, resetting bet sequence for user ${userId}`);
+                await this.saveUserSetting(userId, 'current_bet_index', 0);
 
-            const betMessage = `6 Lottery Placing Auto Bet\n\nIssue: ${issue}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K\nStep: ${currentIndex + 1}/${totalSteps}`;
-            await this.bot.sendMessage(userId, betMessage);
-
-            console.log(`6 Lottery Placing bet for user ${userId}: ${betTypeStr} ${amount}K on ${issue} (Step ${currentIndex + 1}/${totalSteps})`);
-            const result = await userSession.apiInstance.placeBet(amount, betType);
-
-            if (result.success) {
-                console.log(`6 Lottery Bet placed successfully for user ${userId}`);
-                await this.savePendingBet(userId, userSession.platform, result.issueId, betTypeStr, amount);
-
-                if (!issueCheckers[userId]) {
-                    console.log(`6 Lottery Starting issue checker for user ${userId}`);
-                    this.startIssueChecker(userId);
-                }
-
-                const successMessage = `6 Lottery Bet Placed Successfully!\n\nIssue: ${result.issueId}\nType: ${betTypeStr}\nAmount: ${amount.toLocaleString()} K`;
-                await this.bot.sendMessage(userId, successMessage);
-
+                const errorMessage = `6 Lottery Bet Failed - Amount Error\n\nError: ${result.message}\n\nBet sequence has been reset to step 1.`;
+                await this.bot.sendMessage(userId, errorMessage);
             } else {
-                console.log(`6 Lottery Bet failed for user ${userId}: ${result.message}`);
-
-                if (result.message.includes('amount') || result.message.includes('betting')) {
-                    console.log(`6 Lottery Amount error detected, resetting bet sequence for user ${userId}`);
-                    await this.saveUserSetting(userId, 'current_bet_index', 0);
-
-                    const errorMessage = `6 Lottery Bet Failed - Amount Error\n\nError: ${result.message}\n\nBet sequence has been reset to step 1.`;
-                    await this.bot.sendMessage(userId, errorMessage);
-                } else {
-                    const errorMessage = `6 Lottery Bet Failed\n\nError: ${result.message}`;
-                    await this.bot.sendMessage(userId, errorMessage);
-                }
-
-                waitingForResults[userId] = false;
+                const errorMessage = `6 Lottery Bet Failed\n\nError: ${result.message}`;
+                await this.bot.sendMessage(userId, errorMessage);
             }
-        } catch (error) {
-            console.error(`6 Lottery Error in placeAutoBet for user ${userId}:`, error);
+
             waitingForResults[userId] = false;
         }
+    } catch (error) {
+        console.error(`6 Lottery Error in placeAutoBet for user ${userId}:`, error);
+        waitingForResults[userId] = false;
     }
+}
 
     async getFollowBetType(apiInstance) {
         try {
@@ -3133,7 +3119,7 @@ Choose your betting mode:`;
                 }[randomMode] || "Random Bot";
             }
 
-            const botInfoText = `6 LOTTERY BOT INFORMATION\n\nUser ID: ${user_id_display}\nPhone: ${phone}\nGame Type: ${gameType}\nBalance: ${balance.toLocaleString()} K\n\nBot Settings:\nBetting Mode: ${modeText}\nBet Sequence: ${betSequence}\nCurrent Bet: ${currentAmount.toLocaleString()} K (Step ${currentIndex + 1})\nBot Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}\n\nTargets:\nProfit Target: ${profitTarget > 0 ? profitTarget.toLocaleString() + ' K' : 'Disabled'}\nLoss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}\n\nLast Update: ${getMyanmarTime()}`;
+            const botInfoText = `6 LOTTERY BOT INFORMATION\n\nUser ID: ${user_id_display}\nPhone: ${phone}\nGame Type: ${gameType}\nBalance: ${balance.toLocaleString()} K\n\n \nBetting Mode: ${modeText}\nBet Sequence: ${betSequence}\nCurrent Bet: ${currentAmount.toLocaleString()} K (Step ${currentIndex + 1})\nBot Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}\n\n \nProfit Target: ${profitTarget > 0 ? profitTarget.toLocaleString() + ' K' : 'Disabled'}\nLoss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}\n\nLast Update: ${getMyanmarTime()}`;
 
             await this.bot.sendMessage(chatId, botInfoText);
 
