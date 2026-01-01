@@ -185,39 +185,38 @@ class LotteryAPI {
     }
 
     signMd5(data) {
-    console.log('=== 6 LOTTERY SIGNATURE GENERATION START ===');
-    console.log('Original data:', JSON.stringify(data));
+    console.log('=== 6 LOTTERY SIGNATURE GENERATION ===');
     
-    // Remove signature and timestamp for hashing
+    // Copy data and remove signature field
     const signData = { ...data };
     delete signData.signature;
-    delete signData.timestamp;
     
-    console.log('Data after removing signature/timestamp:', JSON.stringify(signData));
+    console.log('Sign data (without signature):', JSON.stringify(signData));
     
-    // 6 Lottery ရဲ့ မူရင်း format ကို သုံးပါ
-    // Key တွေကို alphabetical order စီပြီး "key=value" format ဖြစ်ရမယ်
+    // 6 Lottery signature format: key1=value1&key2=value2 (sorted alphabetically)
     const sortedKeys = Object.keys(signData).sort();
-    console.log('Sorted keys:', sortedKeys);
-    
     let hashString = '';
+    
     sortedKeys.forEach((key, index) => {
-        const value = signData[key];
-        // String တွေကို quotes မပါဘဲ သုံးရမယ်
-        const formattedValue = typeof value === 'string' ? value : JSON.stringify(value);
-        hashString += `${key}=${formattedValue}`;
+        let value = signData[key];
+        
+        // Convert all values to string
+        if (typeof value !== 'string') {
+            value = String(value);
+        }
+        
+        hashString += `${key}=${value}`;
         if (index < sortedKeys.length - 1) {
             hashString += '&';
         }
     });
     
-    console.log('Final hash string before MD5:', hashString);
+    console.log('Hash string for MD5:', hashString);
     
-    // MD5 hash လုပ်ပါ
+    // Generate MD5 hash
     const hash = crypto.createHash('md5').update(hashString).digest('hex').toUpperCase();
-    console.log('Generated MD5 signature:', hash);
-    console.log('Expected signature from original request:', 'A9CD36E46147276BC4579EFA8F8B6A5C');
-    console.log('=== SIGNATURE GENERATION END ===');
+    console.log('Generated signature:', hash);
+    console.log('=== END SIGNATURE GENERATION ===');
     
     return hash;
 }
@@ -226,19 +225,50 @@ class LotteryAPI {
     try {
         console.log(`=== 6 LOTTERY LOGIN ATTEMPT ===`);
         
+        // FIXED PHONE NUMBER - ORIGINAL: 959796572086
         let formattedPhone;
         
-        if (phone === '9796572086' || phone === '959796572086') {
-            formattedPhone = '959796572086';
-            console.log(`Using fixed phone: ${formattedPhone}`);
-        } else {
+        if (phone === '979672086') {
+            // Your input was missing one digit
+            formattedPhone = '959796572086'; // ORIGINAL CORRECT NUMBER
+            console.log(`Fixed phone from ${phone} to ${formattedPhone}`);
+        } else if (phone === '9796572086') {
+            formattedPhone = '959796572086'; // 12 digits
+            console.log(`Fixed phone from ${phone} to ${formattedPhone}`);
+        } else if (phone === '959796572086') {
             formattedPhone = phone;
+            console.log(`Using original phone: ${formattedPhone}`);
+        } else {
+            // For other numbers, ensure 12 digits
+            let cleanPhone = phone.toString().replace(/\D/g, '');
+            if (cleanPhone.startsWith('9') && cleanPhone.length === 9) {
+                formattedPhone = '959' + cleanPhone.substring(1);
+            } else if (cleanPhone.startsWith('09') && cleanPhone.length === 11) {
+                formattedPhone = '959' + cleanPhone.substring(2);
+            } else {
+                formattedPhone = cleanPhone;
+            }
         }
         
-        console.log(`Formatted phone: ${formattedPhone}`);
-        console.log(`Password: ${password.substring(0, 3)}...`);
+        // Ensure 12 digits
+        formattedPhone = formattedPhone.replace(/\D/g, '');
+        if (formattedPhone.length !== 12) {
+            console.error(`Phone must be 12 digits: ${formattedPhone} (${formattedPhone.length})`);
+            return { 
+                success: false, 
+                message: `Phone must be 12 digits. Got: ${formattedPhone}`, 
+                token: "" 
+            };
+        }
         
-        // EXACT ORIGINAL PARAMETERS ကိုသုံးပါ
+        console.log(`Final phone: ${formattedPhone}`);
+        console.log(`Password: ${password}`);
+        
+        // Use dynamic random string and timestamp
+        const timestamp = Math.floor(Date.now() / 1000);
+        const randomStr = this.generateRandomString();
+        
+        // Build request body WITHOUT signature first
         const body = {
             "username": formattedPhone,
             "pwd": password,
@@ -247,72 +277,86 @@ class LotteryAPI {
             "packId": "",
             "deviceId": "b6f892951bdd4b7cd91199bec57e953e",
             "language": 7,
-            "random": "3434db102e44af7a2cc038dab07dbbd",
-            "timestamp": Math.floor(Date.now() / 1000),
-            "signature": "A9CD36E46147276BC4579EFA8F8B6A5C"  // Original signature
+            "random": randomStr,
+            "timestamp": timestamp
         };
         
-        console.log('Login request body:', JSON.stringify(body, null, 2));
+        console.log('Request body (before signature):', JSON.stringify(body, null, 2));
+        
+        // Generate signature
+        const signature = this.signMd5(body);
+        body.signature = signature;
+        
+        console.log('Final request body:', JSON.stringify(body, null, 2));
+        console.log('Generated signature:', signature);
+        console.log('Original signature:', 'A9CD36E46147276BC4579EFA8F8B6A5C');
         
         console.log('Sending login request to:', `${this.baseUrl}Login`);
         
-        try {
-            const response = await axios.post(`${this.baseUrl}Login`, body, {
-                headers: this.headers,
-                timeout: 15000
-            });
-            
-            console.log('Response status:', response.status);
-            console.log('Response data:', JSON.stringify(response.data, null, 2));
-            
-            if (response.data?.code === 0 || response.data?.msgCode === 0) {
-                this.token = response.data.data?.token || '';
-                if (this.token) {
-                    this.headers.Authorization = this.token;
-                    console.log('Login SUCCESS - Token received');
-                    return { 
-                        success: true, 
-                        message: "6 Lottery Login successful", 
-                        token: this.token 
-                    };
-                }
-            }
-            
-            const errorMsg = response.data?.msg || response.data?.message || 'Unknown error';
-            console.log('Login failed with message:', errorMsg);
-            return { 
-                success: false, 
-                message: `6 Lottery Login failed: ${errorMsg}`, 
-                token: "" 
-            };
-            
-        } catch (axiosError) {
-            console.error('Axios error:', axiosError.message);
-            if (axiosError.response) {
-                console.error('Response data:', axiosError.response.data);
-                console.error('Response status:', axiosError.response.status);
+        const response = await axios.post(`${this.baseUrl}Login`, body, {
+            headers: this.headers,
+            timeout: 15000
+        });
+        
+        console.log('Response status:', response.status);
+        console.log('Response data:', JSON.stringify(response.data, null, 2));
+        
+        if (response.data?.code === 0 || response.data?.msgCode === 0) {
+            this.token = response.data.data?.token || '';
+            if (this.token) {
+                this.headers.Authorization = this.token;
+                console.log('Login SUCCESS - Token received');
                 return { 
-                    success: false, 
-                    message: `6 Lottery API Error ${axiosError.response.status}: ${JSON.stringify(axiosError.response.data)}`, 
-                    token: "" 
+                    success: true, 
+                    message: "6 Lottery Login successful", 
+                    token: this.token 
                 };
             }
-            return { 
-                success: false, 
-                message: `6 Lottery Network Error: ${axiosError.message}`, 
-                token: "" 
-            };
         }
+        
+        const errorMsg = response.data?.msg || response.data?.message || 'Unknown error';
+        console.log('Login failed with message:', errorMsg);
+        
+        // Additional debug info
+        if (errorMsg.includes('signature')) {
+            console.log('SIGNATURE DEBUG INFO:');
+            console.log('Hash string should be: username=959796572086&pwd=linlinzaw123&phonetype=2&logintype=mobile&packId=&deviceId=b6f892951bdd4b7cd91199bec57e953e&language=7&random=3434db102e44af7a2cc038dab07dbbd&timestamp=1767236141');
+            console.log('Expected MD5: A9CD36E46147276BC4579EFA8F8B6A5C');
+        }
+        
+        return { 
+            success: false, 
+            message: `6 Lottery Login failed: ${errorMsg}`, 
+            token: "" 
+        };
         
     } catch (error) {
         console.error('Login process error:', error.message);
-        console.error(error.stack);
+        if (error.response) {
+            console.error('Response data:', error.response.data);
+            console.error('Response status:', error.response.status);
+        }
         return { 
             success: false, 
-            message: `6 Lottery Login process error: ${error.message}`, 
+            message: `6 Lottery Login error: ${error.message}`, 
             token: "" 
         };
     }
+}
+
+// Helper function to generate random string
+generateRandomString() {
+    const chars = 'abcdef0123456789';
+    let result = '';
+    for (let i = 0; i < 32; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+// Alternative: Use original random string from successful request
+getOriginalRandom() {
+    return "3434db102e44af7a2cc038dab07dbbd";
 }
 
     async getUserInfo() {
