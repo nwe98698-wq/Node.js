@@ -216,50 +216,69 @@ class LotteryAPI {
     }
 
     async login(phone, password) {
-        try {
-            let formattedPhone = phone;
-
-            // 6 Lottery အတွက် login format
-            if (!phone.startsWith('95')) {
-                formattedPhone = '95' + phone;
-            }
-
-            formattedPhone = formattedPhone.replace(/\D/g, '');
-
-            const body = {
-                "phonetype": -1,
-                "language": 0,
-                "logintype": "mobile",
-                "random": "9078efc98754430e92e51da59eb2563c",
-                "username": formattedPhone,
-                "pwd": password,
-                "timestamp": Math.floor(Date.now() / 1000)
-            };
-
-            body.signature = this.signMd5(body);
-
-            const response = await axios.post(`${this.baseUrl}Login`, body, {
-                headers: this.headers,
-                timeout: 30000
-            });
-
-            if (response.status === 200) {
-                const result = response.data;
-                if (result.msgCode === 0 || result.code === 0 || result.success === true) {
-                    const tokenData = result.data || {};
-                    this.token = `${tokenData.tokenHeader || ''}${tokenData.token || ''}`;
-                    this.headers.Authorization = this.token;
-                    return { success: true, message: "6 Lottery Login successful", token: this.token };
-                } else {
-                    return { success: false, message: result.msg || "6 Lottery Login failed", token: "" };
-                }
-            } else {
-                return { success: false, message: `6 Lottery API connection failed: ${response.status}`, token: "" };
-            }
-        } catch (error) {
-            return { success: false, message: `6 Lottery Login error: ${error.message}`, token: "" };
+    try {
+        // Simple phone formatting for 6 Lottery
+        let formattedPhone = phone.toString().replace(/\D/g, '');
+        
+        // If starts with 09, convert to 959
+        if (formattedPhone.startsWith('09')) {
+            formattedPhone = '959' + formattedPhone.substring(2);
         }
+        // If starts with 9 (9 digits), add 95
+        else if (formattedPhone.startsWith('9') && formattedPhone.length === 9) {
+            formattedPhone = '95' + formattedPhone;
+        }
+        // Ensure starts with 95
+        else if (!formattedPhone.startsWith('95')) {
+            formattedPhone = '95' + formattedPhone;
+        }
+        
+        console.log(`6 Lottery Login - Formatted phone: ${formattedPhone}`);
+        
+        const body = {
+            "phonetype": -1,
+            "language": 0,
+            "logintype": "mobile",
+            "random": "9078efc98754430e92e51da59eb2563c",
+            "username": formattedPhone,
+            "pwd": password,
+            "timestamp": Math.floor(Date.now() / 1000)
+        };
+        
+        body.signature = this.signMd5(body);
+        
+        const response = await axios.post("https://6lotteryapi.com/api/webapi/Login", body, {
+            headers: {
+                "Accept": "application/json, text/plain, */*",
+                "Content-Type": "application/json;charset=UTF-8",
+                "Origin": "https://6lotteryapi.com",
+                "Referer": "https://6lotteryapi.com/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            timeout: 10000
+        });
+        
+        if (response.data?.code === 0) {
+            this.token = response.data.data?.token || "";
+            if (this.token) {
+                return { success: true, message: "Login successful", token: this.token };
+            }
+        }
+        
+        return { 
+            success: false, 
+            message: response.data?.msg || "Login failed", 
+            token: "" 
+        };
+        
+    } catch (error) {
+        return { 
+            success: false, 
+            message: error.response?.data?.msg || error.message, 
+            token: "" 
+        };
     }
+}
 
     async getUserInfo() {
         try {
