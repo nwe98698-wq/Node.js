@@ -227,7 +227,7 @@ class LotteryAPI {
             formattedPhone = formattedPhone.replace(/\D/g, '');
 
             const body = {
-                "phonetype": -2,
+                "phonetype": -1,
                 "language": 0,
                 "logintype": "mobile",
                 "random": "9078efc98754430e92e51da59eb2563c",
