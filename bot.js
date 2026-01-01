@@ -4,7 +4,7 @@ const axios = require('axios');
 const crypto = require('crypto');
 
 // BOT CONFIGURATION
-const BOT_TOKEN = "8539481129:AAGUMOeiUxSkV_ZJN_uIn3VfWsc0tm8uGCU";
+const BOT_TOKEN = "8308226058:AAFrsSTKsGE9daTyxE5QDcBNO8ly1C8ivcc";
 const CHANNEL_USERNAME = "@Vipsafesingalchannel298";
 const CHANNEL_LINK = "https://t.me/Vipsafesingalchannel298";
 const ADMIN_USER_ID = "6328953001";
